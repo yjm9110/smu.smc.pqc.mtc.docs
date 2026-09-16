@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Home</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Home</h1>
+
+    
+
+
+
+    
+
+
+    <h3> </h3>
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    <section>
+        <article><h1>PQC File Sharing System (Client JS)</h1>
+<p>This directory contains the browser-side cryptographic library for the PQC File
+Sharing System. It uses WebAssembly-based ML-KEM and ML-DSA together with
+PKI.js, ASN.1.js, and js-sha3.</p>
+<h2>Requirements</h2>
+<ul>
+<li>Node.js 22 or newer; Node.js 24 LTS is recommended</li>
+<li>npm, included with the official Node.js distribution</li>
+<li>Go only when rebuilding <code>src/pqc.wasm</code> from <code>wasm/</code></li>
+</ul>
+<h2>Install dependencies and build</h2>
+<pre class="prettyprint source lang-bash"><code>npm install
+npm run build
+</code></pre>
+<p>The build produces two files in <code>dist/</code>:</p>
+<pre class="prettyprint source lang-text"><code>dist/
+├── pqc-lib.js
+└── pqc.wasm
+</code></pre>
+<p>Keep these two files in the same directory. The JavaScript module loads the
+WebAssembly file relative to itself.</p>
+<h2>Run tests</h2>
+<pre class="prettyprint source lang-bash"><code>npm test
+</code></pre>
+<p>The structural tests verify that source imports still resolve after directory
+changes, the npm build uses <code>src/index.js</code>, and the browser demo loads the
+generated distribution.</p>
+<h2>Rebuild WebAssembly</h2>
+<p>The repository includes the compiled <code>src/pqc.wasm</code> used by the normal JS
+build. If Go is installed and the Go implementation changes, rebuild it with:</p>
+<pre class="prettyprint source lang-bash"><code>npm run build:wasm
+</code></pre>
+<h2>Run the HTML demo</h2>
+<p>Serve this directory with a local HTTP server and open <code>demo/index.html</code>. The
+demo imports <code>test_work_flow</code> from the same bundled library distributed to
+users. Opening the HTML file directly with a <code>file://</code> URL is not supported
+because the browser must fetch the WebAssembly asset.</p>
+<h2>Generate API documentation</h2>
+<pre class="prettyprint source lang-bash"><code>npm run docs
+</code></pre>
+<p>The generated documentation is written to <code>../docs-site/js/api/</code>. Its overview page is built
+directly from this README, so installation, demo, and Chrome extension guidance
+remain synchronized with the repository documentation.
+Browse the published <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/js/api/">JavaScript API reference</a>.</p>
+<h2>Use in a Chrome extension</h2>
+<p>Copy both files from <code>dist/</code> into the extension, for example:</p>
+<pre class="prettyprint source lang-text"><code>extension/
+├── manifest.json
+├── background.js
+└── lib/
+    ├── pqc-lib.js
+    └── pqc.wasm
+</code></pre>
+<p>Configure a Manifest V3 module service worker:</p>
+<pre class="prettyprint source lang-json"><code>{
+  &quot;background&quot;: {
+    &quot;service_worker&quot;: &quot;background.js&quot;,
+    &quot;type&quot;: &quot;module&quot;
+  }
+}
+</code></pre>
+<p>Then import the required API without modifying this library's source:</p>
+<pre class="prettyprint source lang-javascript"><code>import {
+  kemKeyGen,
+  exportKemPKToPem,
+  decodeCertFromPem,
+  isCertExpired,
+  isCACert,
+  extractAdminDsaPK,
+  extractUserKemPK,
+  importKemSkFromPem,
+  verifyUserCert,
+  verifyMemberProof,
+  aes_random_key_gen,
+  mlkem_enc_with_aesKey,
+  mlkem_dec_with_aesKey,
+  mlkem_re_enc_with_aesKey,
+  aes_enc,
+  aes_dec
+} from &quot;./lib/pqc-lib.js&quot;;
+</code></pre>
+<p>This is the complete set of public APIs called directly by <code>test_work_flow</code>.
+Import only the subset needed by an extension in production code.</p>
+<p><code>src/index.js</code> is the single source-level public entry point.
+<code>src/pqc_funcs.js</code> contains the reusable cryptographic API, while
+<code>src/examples.js</code> contains the exported end-to-end example workflow.</p>
+<h2>Project structure</h2>
+<pre class="prettyprint source lang-text"><code>js/
+├── src/                        Publishable JavaScript source and runtime assets
+│   ├── index.js                Public library entry point
+│   ├── pqc_funcs.js            Certificates, proofs, ML-KEM, and AES APIs
+│   ├── hash_utils.js           Java-compatible MTC hash calculations
+│   ├── pqc_wrapper.js          JavaScript bridge to WebAssembly
+│   ├── examples.js             Exported end-to-end workflow
+│   ├── wasm_exec.js            Go WebAssembly runtime
+│   └── pqc.wasm                Compiled ML-KEM and ML-DSA module
+├── scripts/                    Executable development and build scripts
+│   ├── build-wasm.sh           Rebuilds src/pqc.wasm from Go source
+│   └── generate-docs.mjs       Generates and validates JSDoc
+├── wasm/                       Go source for the WebAssembly module
+├── demo/index.html             Browser demo entry page
+├── tests/                      Source layout and import-path checks
+├── tutorials/                  JSDoc tutorial sources
+├── dist/                       Generated browser distribution
+├── ../docs-site/js/api/        Generated API documentation (separate repository)
+├── jsdocs.json                 JSDoc configuration
+├── package.json                npm scripts and dependency declarations
+├── package-lock.json           Reproducible npm dependency lock
+└── README.md                   Module guide and JSDoc overview source
+</code></pre></article>
+    </section>
+
+
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a>
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

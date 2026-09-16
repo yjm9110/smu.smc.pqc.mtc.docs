@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pqc_funcs.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pqc_funcs.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import {mlkem, mldsa} from "./pqc_wrapper.js";
+
+// Import PKI.js library for handling X.509 certificates and structures
+import * as pkijs from "pkijs";
+// Import ASN.1.js library for encoding and decoding ASN.1 binary structures
+import * as asn1js from "asn1js";
+import { leafHASH, nodeHASH, stateHASH_raw } from "./hash_utils.js";
+
+/**
+ * Converts a PEM-formatted string (such as certificates or keys) into a binary ArrayBuffer.
+ * @param {string} pem - The PEM-formatted string containing headers, footers, and base64 data.
+ * @returns {ArrayBuffer} The raw binary representation of the PEM content.
+ */
+function pemToBuffer(pem) {
+    // Strip out PEM headers, footers, line breaks, and all whitespace characters
+    const b64 = pem.replace(/-----(BEGIN|END)[^-]+-----|\s+/g, '');
+    // Decode the base64 string into a binary string
+    const binStr = atob(b64);
+    const len = binStr.length;
+    // Allocate a typed array for the binary bytes
+    const bytes = new Uint8Array(len);
+    // Populate the byte array from the binary string character codes
+    for (let i = 0; i &lt; len; i++) {
+        bytes[i] = binStr.charCodeAt(i);
+    }
+    // Return the underlying ArrayBuffer
+    return bytes.buffer;
+}
+
+/**
+ * Encapsulates a raw binary buffer into a standard PEM-formatted text block.
+ * @param {ArrayBuffer} buffer - The raw binary data to wrap.
+ * @param {string} [label="PRIVATE KEY"] - The label to display in the PEM header and footer.
+ * @returns {string} The formatted PEM text string.
+ */
+function BufferToPem(buffer, label = "PRIVATE KEY") {
+    // Convert the ArrayBuffer bytes into a base64 encoded string
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    // Format the base64 string by inserting a newline character every 64 characters
+    const formatted = base64.match(/.{1,64}/g).join('\n');
+    // Return the complete PEM string wrapped with header and footer tags
+    return `-----BEGIN ${label}-----\n${formatted}\n-----END ${label}-----`;
+}
+
+/**
+ * Parses an X.509 certificate object from a PEM-formatted string.
+ * @param {string} pem - The PEM-formatted X.509 certificate string.
+ * @returns {pkijs.Certificate} The parsed PKI.js Certificate object instance.
+ */
+export function decodeCertFromPem(pem) {
+    // Convert the PEM string into a raw binary buffer
+    const buf = pemToBuffer(pem);
+    // Parse the ASN.1 schema structure and construct a PKI.js Certificate object
+    const asn1 = asn1js.fromBER(buf);
+    if (asn1.offset === (-1) || !asn1.result) {
+        throw new Error("ASN.1 parsing failed. The binary data is not a valid DER-encoded certificate.");
+    }
+
+    // 5. Map to pkijs Certificate object safely
+    return new pkijs.Certificate({ schema: asn1.result });
+    // const cert = new pkijs.Certificate({ schema: asn1js.fromBER(buf).result });
+    // // Return the initialized certificate object
+    // return cert;
+}
+
+/**
+ * Extracts and imports the Admin's ML-DSA public key from an X.509 certificate.
+ * @param {pkijs.Certificate} adminCert - The Admin CA's certificate object.
+ * @returns {Promise&lt;CryptoKey>} The imported ML-DSA public CryptoKey configured for signature verification.
+ */
+export async function extractAdminDsaPK(adminCert) {
+    // Export the SubjectPublicKeyInfo (spki) ASN.1 block from the certificate
+    const adminpkcs8Buffer = adminCert.subjectPublicKeyInfo.toSchema().toBER(false);
+    // Import the spki buffer into the ML-DSA provider engine as a verify-capable CryptoKey
+    const adminDsaKey = await mldsa.importPK(
+        "spki",
+        adminpkcs8Buffer,
+        { name: "ML-DSA-65" }
+    );
+    // Return the imported administrative public key
+    return adminDsaKey;
+}
+
+/**
+ * Extracts and imports a User's ML-KEM public key from their X.509 certificate.
+ * @param {pkijs.Certificate} userCert - The user's certificate object.
+ * @returns {Promise&lt;CryptoKey>} The imported ML-KEM public CryptoKey configured for encapsulation.
+ */
+export async function extractUserKemPK(userCert) {
+    // Extract the SubjectPublicKeyInfo (spki) sequence from the user certificate
+    const userpkcs8Buffer = userCert.subjectPublicKeyInfo.toSchema().toBER(false);
+    // Import the raw spki bytes into the ML-KEM provider engine for key encapsulation
+
+    const bytes = new Uint8Array(userpkcs8Buffer);
+
+    // Import the binary SPKI data into the ML-KEM engine for encapsulation operations
+    const publicKey = await mlkem.importPK(
+        "spki",
+        bytes,
+        { name: "ML-KEM-768" }
+    );
+    // Return the imported private key object
+    return publicKey;
+}
+
+/**
+ * Verifies the cryptographic signature of a user certificate using the Admin's ML-DSA public key.
+ * @param {pkijs.Certificate} userCert - The user's certificate to verify.
+ * @param {CryptoKey} adminDsaKey - The Admin's ML-DSA verification public key.
+ * @returns {Promise&lt;boolean>} True if the signature is valid, false otherwise.
+ */
+export async function verifyUserCert(userCert, adminDsaKey) {
+    // 1. 获取最原始的 To-Be-Signed (TBS) 字节数组
+    // 在 pkijs 中，解析证书后，原始的 TBS 字节（Uint8Array）直接保存在 userCert.tbs 属性中
+    const userTbs = userCert.tbs;
+    
+    if (!userTbs) {
+        console.error("🚨 无法从证书中提取 TBS 数据，证书结构可能已损坏。");
+        return false;
+    }
+
+    // 2. 提取签名值 (Signature Value)
+    const userSig = new Uint8Array(userCert.signatureValue.valueBlock.valueHexView);
+
+    // 3. 调用 Web Crypto API 进行 ML-DSA 验签
+    try {
+        const isUserValid = await mldsa.verify(
+            adminDsaKey, 
+            userSig.buffer, 
+            userTbs
+        );
+
+        // 4. 判断验签结果
+        if (!isUserValid) {
+            console.error("Failed to verify the certificate. It is not issued by Admin or illegally modified.");
+            return false;
+        }
+
+        // console.log("User certificate verification passed.");
+        return true;
+        
+    } catch (e) {
+        console.error("Exception occurs when verification:", e.message);
+        return false;
+    }
+}
+
+
+/**
+ * Imports an ML-KEM public key object from a PKCS#8 PEM string.
+ * @param {string} pemStr - The PEM-formatted public key string.
+ * @returns {CryptoKey} The imported ML-KEM public key CryptoKey object.
+ */
+export function importKemPkFromPem(pemStr) {
+    const arrayBuffer = pemToBuffer(pemStr);
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Import the binary PKCS#8 data into the ML-KEM engine for decapsulation operations
+    const publicKey = mlkem.importPK(
+        "spki",
+        bytes,
+        { name: "ML-KEM-768" }
+    );
+    // Return the imported public key object
+    return publicKey;
+}
+
+
+/**
+ * Imports an ML-KEM private key object from a PKCS#8 PEM string.
+ * @param {string} pemStr - The PEM-formatted private key string.
+ * @returns {CryptoKey} The imported ML-KEM private key CryptoKey object.
+ */
+export function importKemSkFromPem(pemStr) {
+    const arrayBuffer = pemToBuffer(pemStr);
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Import the binary PKCS#8 data into the ML-KEM engine for decapsulation operations
+    const privateKey = mlkem.importSK(
+        "pkcs8",
+        bytes,
+        { name: "ML-KEM-768" }
+    );
+    // Return the imported private key object
+    return privateKey;
+}
+
+/**
+ * Encapsulates a shared secret using a recipient's ML-KEM public key.
+ * @param {CryptoKey} kemPK - The recipient's ML-KEM public key.
+ * @returns {Promise&lt;{ct: ArrayBuffer, ss: ArrayBuffer}>} The generated ciphertext and shared secret.
+ */
+export async function mlkem_enc(kemPK) {
+    // Invoke the ML-KEM encapsulation routine to produce ciphertext and a shared key
+    const { ct, ss } = await mlkem.encapsulate({ name: "ML-KEM-768" }, kemPK);
+    // Return the ciphertext and symmetric key mapping object
+    return { ct, ss }
+}
+
+/**
+ * Decapsulates a ciphertext using an ML-KEM private key to recover the shared secret.
+ * @param {ArrayBuffer} sym_key_CT - The encapsulation ciphertext.
+ * @param {CryptoKey} kemSK - The recipient's ML-KEM private key.
+ * @returns {Promise&lt;ArrayBuffer>} The recovered shared symmetric key buffer.
+ */
+export async function mlkem_dec(sym_key_CT, kemSK) {
+    // Invoke the ML-KEM decapsulation routine using the private key and ciphertext
+    const recovered_sym_key = await mlkem.decapsulate(
+        { name: "ML-KEM-768" },
+        kemSK,
+        sym_key_CT
+    );
+    // Return the recovered shared secret buffer
+    return recovered_sym_key;
+}
+
+/**
+ * Exports an ML-KEM public key to a standard pkcs8 PEM string.
+ * @param {CryptoKey} kemPK - The ML-KEM public key object.
+ * @returns {Promise&lt;string>} The PEM-encoded public key string.
+ */
+export async function exportKemPKToPem(kemPK) {
+    // Export the public key to x.509 (spki) binary format ArrayBuffer
+    const buffer = await mlkem.exportPK("spki", kemPK);
+    // Wrap the buffer into a PUBLIC KEY PEM string format
+    return BufferToPem(buffer, "PUBLIC KEY");
+}
+
+/**
+ * Exports an ML-KEM private key to a standard PKCS#8 PEM string.
+ * @param {CryptoKey} kemSK - The ML-KEM private key object.
+ * @returns {Promise&lt;string>} The PEM-encoded private key string.
+ */
+export async function exportKemSKToPem(kemSK) {
+    // Export the private key to PKCS#8 binary format ArrayBuffer
+    const buffer = await mlkem.exportSK("pkcs8", kemSK);
+    // Wrap the buffer into a PRIVATE KEY PEM string format
+    return BufferToPem(buffer, "PRIVATE KEY");
+}
+
+/**
+ * Generates a fresh ML-KEM-768 asymmetric key pair for encapsulation and decapsulation.
+ * @returns {Promise&lt;{publicKey: CryptoKey, privateKey: CryptoKey}>} The generated key pair object.
+ */
+export async function kemKeyGen() {
+    // Call the provider's generateKey function with explicit algorithm settings and usages
+    const { publicKey, privateKey } = await mlkem.generateKey({ name: "ML-KEM-768" });
+    // Return the generated public and private keys
+    return { publicKey, privateKey };
+}
+
+/**
+ * Checks whether an X.509 certificate has expired based on the current system time.
+ * @param {pkijs.Certificate} cert - The certificate object to evaluate.
+ * @returns {boolean} True if the certificate is expired, false if it is currently valid.
+ */
+export function isCertExpired(cert) {
+    // Capture the current local date and time instance
+    const now = new Date();
+    // Validate if the current timestamp falls strictly within the validity boundary window
+    if (now >= cert.notBefore.value &amp;&amp; now &lt;= cert.notAfter.value) {
+        return false; // Return false because the certificate has not expired yet
+    } else {
+        return true;  // Return true because the certificate is expired or not yet active
+    }
+}
+
+/**
+ * Validates whether a given certificate contains the CA (Certification Authority) basic constraints flag.
+ * @param {pkijs.Certificate} rootCert - The certificate object to check.
+ * @returns {boolean} True if the certificate is a valid CA, false otherwise.
+ */
+export function isCACert(rootCert) {
+    let isCA = false;
+
+    // Check if the certificate contains any extensions
+    if (rootCert.extensions &amp;&amp; Array.isArray(rootCert.extensions)) {
+        for (const ext of rootCert.extensions) {
+            // Check if the extension OID matches the Basic Constraints extension identifier (2.5.29.19)
+            if (ext.extnID === "2.5.29.19") {
+                // Note: ext.parsedValue is already parsed by pkijs, so we can directly access its properties.
+                // If ext.parsedValue is a BasicConstraints object, it directly exposes the 'cA' property.
+                if (ext.parsedValue &amp;&amp; ext.parsedValue.cA === true) {
+                    isCA = true;
+                    break; // Exit loop early once CA confirmation is found
+                }
+            }
+        }
+    }
+
+    // Log a warning message if the CA flag is missing or disabled
+    if (!isCA) {
+        console.warn("Critical Error: this cert is issued by an illegal CA or lacks the CA basic constraint.");
+    }
+
+    // Return the evaluation result flag
+    return isCA;
+}
+
+/**
+ * Verifies a serialized Merkle-tree membership proof and its signed state hash.
+ *
+ * @param {string} proofJsonStr JSON-encoded proof containing the certificate,
+ * proof nodes, previous state hash, timestamp, duration, and state signature.
+ * @param {CryptoKey|Object} adminDsaPK Admin ML-DSA public key used for verification.
+ * @param {number} time Timestamp at which membership should be checked.
+ * @returns {Promise&lt;boolean>} Whether the proof is current and its signature is valid.
+ * @throws {SyntaxError} If `proofJsonStr` is not valid JSON.
+ */
+
+export async function verifyMemberProof(proofJsonStr, adminDsaPK, time){
+    if (proofJsonStr == "")
+        return false;
+    const proof = JSON.parse(proofJsonStr);
+    if(time >= proof.timestamp + proof.duration || time &lt; proof.timestamp){
+        const t = new Date(time);
+        console.log("This membership proof is expired or not recorded at time " + t);
+        return false;
+    }
+
+    // get hash of cert
+    const certHash = leafHASH(pemToBuffer(proof.userCertPem));
+    let preHash = certHash;
+    // compute the root
+    proof.proofNodes.forEach(node => {
+        if(node.isLeft){
+            preHash = nodeHASH(node.hash, preHash);
+        }else{
+            preHash = nodeHASH(preHash, node.hash);
+        }
+    });
+    const rootHash = preHash;
+    // compute state hash
+    const stateHash = stateHASH_raw(rootHash, proof.preStateHash, proof.timestamp);
+    const sigBuffer = pemToBuffer(proof.curStateSig);
+    const isValid = await mldsa.verify(
+        adminDsaPK,
+        sigBuffer,
+        stateHash
+    );
+    return isValid;
+}
+
+var pqc_funcs = {
+    kemKeyGen,
+    exportKemPKToPem,
+    decodeCertFromPem,
+    isCertExpired,
+    isCACert,
+    extractAdminDsaPK,
+    extractUserKemPK,
+    importKemSkFromPem,
+    importKemPkFromPem,
+    verifyUserCert,
+    mlkem_enc,
+    mlkem_dec,
+    verifyMemberProof,
+    mlkem_enc_with_aesKey,
+    mlkem_dec_with_aesKey,
+    mlkem_re_enc_with_aesKey,
+    aes_random_key_gen,
+    aes_enc,
+    aes_dec
+};
+var pqc_funcs_default = pqc_funcs;
+export {
+    pqc_funcs_default as default
+};
+
+
+/**
+ * Encapsulates an AES key for an ML-KEM recipient.
+ *
+ * @param {CryptoKey} kemPK - The recipient's ML-KEM public key.
+ * @param {ArrayBuffer} aesKey - The symmetric AES key to be encrypted.
+ * @returns {Promise&lt;{ssCT: ArrayBuffer, aesCT: ArrayBuffer}>} The generated shared secret ciphertext and AES key ciphertext.
+ */
+export async function mlkem_enc_with_aesKey(kemPK, aesKey) {
+    // Invoke the ML-KEM encapsulation routine to produce ciphertext and a shared key
+    const { ct:ssCT, ss:ss } = await pqc_funcs.mlkem_enc(kemPK);
+    // Encrypt the provided AES key using the derived shared session key
+    const aesCT = await aes_enc(aesKey, ss);
+    // Return the ciphertext and symmetric key mapping object
+    return { ssCT, aesCT }
+}
+
+/**
+ * Recovers an AES key from its ML-KEM and AES-GCM ciphertexts.
+ *
+ * @param {CryptoKey} kemSK - The recipient's ML-KEM private key.
+ * @param {ArrayBuffer} ssCT - The ML-KEM ciphertext.
+ * @param {ArrayBuffer} aesCT - The AES ciphertext.
+ * @returns {Promise&lt;ArrayBuffer>} The decrypted AES key bytes.
+ */
+export async function mlkem_dec_with_aesKey(kemSK, ssCT, aesCT) {
+    // Invoke the ML-KEM decapsulation routine to recover the shared session key
+    const recoveredSS = await pqc_funcs.mlkem_dec(ssCT, kemSK);
+    // Decrypt the AES key ciphertext using the recovered shared session key
+    const recoveredAESKey = await aes_dec(aesCT, recoveredSS);
+    // Return the decrypted AES key bytes
+    return recoveredAESKey;
+}
+
+/**
+ * Re-encrypts an encapsulated AES key for a new ML-KEM recipient.
+ *
+ * @param {CryptoKey} kemSK - The original ML-KEM private key used to decapsulate the original ciphertext.
+ * @param {ArrayBuffer} ssCT - The ML-KEM ciphertext, which encapsulates the shared session key ss.
+ * @param {ArrayBuffer} aesCT - The AES key's ciphertext, encrypted by ss using AES-GCM.
+ * @param {CryptoKey} newKemPK - The new ML-KEM public key to re-encapsulate the recovered AES key.
+ * @returns {Promise&lt;{ssCT: ArrayBuffer, aesCT: ArrayBuffer}>}
+ */
+export async function mlkem_re_enc_with_aesKey(kemSK, ssCT, aesCT, newKemPK) {
+    // Decapsulate the original ML-KEM ciphertext to recover the encrypted AES key.
+    const recoveredAESKey = await mlkem_dec_with_aesKey(kemSK, ssCT, aesCT);
+    // Re-encapsulate the AES key with the new ML-KEM public key
+    return await mlkem_enc_with_aesKey(newKemPK, recoveredAESKey);
+}
+
+/**
+ * Generates a cryptographically secure 256-bit AES key.
+ *
+ * @returns {Promise&lt;Uint8Array>} A random 256-bit AES key in Uint8Array format for symmetric encryption.
+ */
+export async function aes_random_key_gen() {
+    // Generate a new random 256-bit AES key for symmetric encryption
+    const aesKey = globalThis.crypto.getRandomValues(new Uint8Array(32));
+    return aesKey;
+}
+
+/**
+ * Encrypts a message buffer using the AES-GCM symmetric encryption scheme.
+ * @param {Uint8Array} msg - The plaintext message bytes to encrypt.
+ * @param {Uint8Array} key - The AES-GCM symmetric key.
+ * @returns {Promise&lt;Uint8Array>} A combined buffer containing the random IV and the resulting ciphertext.
+ */
+export async function aes_enc(msg, key) {
+    // 1. Import the raw symmetric key into a Web Crypto API CryptoKey object.
+    // Note: The AES key length must be exactly 16 bytes (128-bit), 24 bytes (192-bit), or 32 bytes (256-bit).
+    const cryptoKey = await globalThis.crypto.subtle.importKey(
+        "raw",                     // Format: Use "raw" for standard binary cryptographic keys.
+        key,                       // The raw key material (must be an ArrayBuffer or Uint8Array).
+        { name: "AES-GCM" },       // Target cryptographic algorithm.
+        false,                     // Extractability: Set to false to prevent the key material from being exported.
+        ["encrypt", "decrypt"]     // Key usages: Permitted operations for this key (encrypt and decrypt).
+    );
+
+    // Generate a secure cryptographically random 12-byte (96-bit) Initialization Vector (IV)
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    // Execute native browser hardware-accelerated AES-GCM encryption
+    const ciphertext = await globalThis.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        cryptoKey,
+        msg
+    );
+
+    // Allocate a unified buffer block to house both the IV prefix and the encrypted payload data
+    const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+    // Copy the IV bytes into the beginning of the combined buffer
+    combined.set(iv, 0);
+    // Copy the ciphertext bytes immediately following the IV section
+    combined.set(new Uint8Array(ciphertext), iv.byteLength);
+
+    // Return the complete combined binary payload block
+    return combined;
+}
+
+/**
+ * Decrypts a combined IV-and-ciphertext buffer using AES-GCM.
+ * @param {Uint8Array} combinedData - The combined payload containing both the IV prefix and ciphertext.
+ * @param {Uint8Array} key - The AES-GCM symmetric key.
+ * @returns {Promise&lt;Uint8Array>} The recovered decrypted plaintext byte array.
+ */
+export async function aes_dec(combinedData, key) {
+    // 1. Import the raw symmetric key into a Web Crypto API CryptoKey object.
+    // Note: The AES key length must be exactly 16 bytes (128-bit), 24 bytes (192-bit), or 32 bytes (256-bit).
+    const cryptoKey = await globalThis.crypto.subtle.importKey(
+        "raw",                     // Format: Use "raw" for standard binary cryptographic keys.
+        key,                       // The raw key material (must be an ArrayBuffer or Uint8Array).
+        { name: "AES-GCM" },       // Target cryptographic algorithm.
+        false,                     // Extractability: Set to false to prevent the key material from being exported.
+        ["encrypt", "decrypt"]     // Key usages: Permitted operations for this key (encrypt and decrypt).
+    );
+
+    // Isolate the leading 12 bytes to serve as the Initialization Vector (IV)
+    const iv = combinedData.subarray(0, 12);
+    // Isolate all remaining trailing bytes to serve as the encrypted payload ciphertext
+    const ciphertext = combinedData.subarray(12);
+
+    // Execute native browser AES-GCM decryption using the extracted IV and key
+    const decrypted = await globalThis.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        cryptoKey,
+        ciphertext
+    );
+
+    // Return the decrypted output wrapped in a Uint8Array view
+    return new Uint8Array(decrypted);
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a>
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

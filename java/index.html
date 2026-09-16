@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java guide</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+    body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid #aaa6; padding-bottom: 1rem; }
+    a { color: #2867b2; } table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #aaa6; padding: .55rem; text-align: left; }
+    pre { overflow-x: auto; padding: 1rem; background: #8882; border-radius: .4rem; }
+    code { overflow-wrap: anywhere; } img { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <nav aria-label="Documentation"><a href="../index.html">Overview</a><a href="../java/index.html">Java guide</a><a href="../js/index.html">JavaScript guide</a></nav>
+  <main><h1 id="pqc-file-sharing-system-java">PQC File Sharing System (Java)</h1>
+<p>This directory contains the Java implementation of the Merkle Tree Certificate
+(MTC) service used by the PQC File Sharing System. It issues ML-KEM user
+certificates with an ML-DSA administrator key, builds signed Merkle tree states,
+and generates or validates membership proofs.</p>
+<p>Two tree designs are included:</p>
+<ul>
+<li><code>MTC_Service_Baseline</code> rebuilds the state from the certificates valid in each
+time window.</li>
+<li><code>MTC_Service_AppendOnly</code> preserves earlier leaves and appends new
+certificates. This is the design used by the MySQL build runner.</li>
+</ul>
+<p>SQLite implementations and examples are provided for local development. The
+MySQL implementation and one-shot runner are intended for deployment.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>JDK 8 or newer to build and run the application</li>
+<li>Maven 3.x</li>
+<li>JDK 18 or newer when generating the current Javadoc, because its overview
+uses Javadoc snippet tags</li>
+<li>MySQL 8 only when using the MySQL-backed runner or example</li>
+</ul>
+<h2 id="build">Build</h2>
+<p>From this directory, run:</p>
+<pre><code class="language-bash">mvn clean package
+</code></pre>
+<p>The build creates the executable fat JAR at:</p>
+<pre><code class="language-text">target/pqc-mtc.jar
+</code></pre>
+<p>The JAR&#39;s entry point is <code>com.smu.mtc.runner.MTC_BuildRunner</code>.</p>
+<h2 id="run-the-local-sqlite-example">Run the local SQLite example</h2>
+<p>The SQLite workflow exercises key generation, certificate issuance, state
+construction, membership-proof generation, and local verification without
+requiring MySQL:</p>
+<pre><code class="language-bash">java -cp target/pqc-mtc.jar com.smu.TestSQLite
+</code></pre>
+<p>The convenience script builds the project first and then runs the same example:</p>
+<pre><code class="language-bash">./maven_run.sh
+</code></pre>
+<p>The example creates <code>example.db</code> in this directory.</p>
+<h2 id="run-one-mysql-build-round">Run one MySQL build round</h2>
+<p>Create a local configuration file and edit its database credentials and key
+paths:</p>
+<pre><code class="language-bash">cp conf/mtc.env.example conf/mtc.env
+mvn clean package
+java -jar target/pqc-mtc.jar
+</code></pre>
+<p><code>MTC_BuildRunner</code> performs one append-only build round and exits. It loads or
+creates the administrator signing key, consumes a batch of pending
+certificates, updates the tree and state in one database transaction, and marks
+the consumed queue rows as processed. A failed round is rolled back so a later
+invocation can retry it.</p>
+<p>Configuration values can be supplied as operating-system environment variables
+or through <code>conf/mtc.env</code>. Environment variables take precedence. The supported
+values are documented in <a href="https://github.com/yjm9110/smu.smc.pqc.mtc/blob/main/java/PQC-MTC/conf/mtc.env.example"><code>conf/mtc.env.example</code></a>.</p>
+<p>The MySQL <code>certs</code>, <code>nodes</code>, and <code>states</code> tables must already exist. The
+<a href="https://github.com/yjm9110/smu.smc.pqc.mtc/blob/main/java/PQC-MTC/sql/pending_certs.sql"><code>sql/pending_certs.sql</code></a> script creates the input queue
+table consumed by the runner. Only <code>ADD</code> operations are currently processed.</p>
+<h2 id="generate-api-documentation">Generate API documentation</h2>
+<pre><code class="language-bash">./maven_javadoc.sh
+</code></pre>
+<p>The generated Javadoc is written to <code>../../docs-site/java/apidocs/</code>. Open the
+<a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/java/apidocs/">published Javadoc</a> to browse the database
+integration guide, API reference, and baseline and append-only examples.</p>
+<h2 id="project-layout">Project layout</h2>
+<pre><code class="language-text">PQC-MTC/
+├── conf/                 Local configuration template
+├── ../../docs-site/java/apidocs/  Generated Javadoc (separate repository)
+├── src/main/java/        Service, persistence, runner, and examples
+├── src/main/javadoc/     Javadoc overview source
+├── maven_javadoc.sh      Documentation generator
+├── maven_run.sh          Build and SQLite example helper
+└── pom.xml               Maven build configuration
+</code></pre>
+<p>The browser-side verifier and encryption library are documented in the
+<a href="../js/index.html">JavaScript README</a>.</p>
+</main>
+  <footer><p>Generated from the main repository README files. Edit the READMEs, then regenerate the documentation.</p></footer>
+</body>
+</html>

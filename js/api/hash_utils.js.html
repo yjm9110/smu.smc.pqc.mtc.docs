@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: hash_utils.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: hash_utils.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import jsSha3 from "js-sha3";
+
+/**
+ * Byte-compatible SHA3-256 helpers matching the Java `Utils` class.
+ *
+ * @module hash_utils
+ */
+
+const { sha3_256 } = jsSha3;
+
+const LEAF_PREFIX = 0x00;
+const NON_LEAF_PREFIX = 0x01;
+const STATE_PREFIX = 0x02;
+
+/**
+ * Normalizes supported binary input into a byte-array view without copying it.
+ *
+ * @param {ArrayBuffer|ArrayBufferView} value Binary data to normalize.
+ * @returns {Uint8Array} A byte-array view over the supplied data.
+ * @throws {TypeError} If the value is not an ArrayBuffer or typed-array view.
+ */
+function toUint8Array(value) {
+    if (value instanceof Uint8Array) {
+        return value;
+    }
+    if (value instanceof ArrayBuffer) {
+        return new Uint8Array(value);
+    }
+    if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    }
+    throw new TypeError("Expected an ArrayBuffer or typed array");
+}
+
+/**
+ * Concatenates binary values in their original order.
+ *
+ * @param {...(ArrayBuffer|ArrayBufferView)} values Binary values to concatenate.
+ * @returns {Uint8Array} A newly allocated array containing all input bytes.
+ * @throws {TypeError} If any value is not supported binary data.
+ */
+function concatBytes(...values) {
+    const arrays = values.map(toUint8Array);
+    const result = new Uint8Array(
+        arrays.reduce((total, value) => total + value.byteLength, 0)
+    );
+    let offset = 0;
+    for (const value of arrays) {
+        result.set(value, offset);
+        offset += value.byteLength;
+    }
+    return result;
+}
+
+/**
+ * Encodes raw bytes as standard padded Base64.
+ *
+ * @param {ArrayBuffer|ArrayBufferView} value Raw bytes to encode.
+ * @returns {string} Standard Base64 text.
+ */
+export function bytesToBase64(value) {
+    const bytes = toUint8Array(value);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset &lt; bytes.byteLength; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+}
+
+/**
+ * Decodes standard Base64 into raw bytes.
+ *
+ * @param {string} value Base64 text.
+ * @returns {Uint8Array} Decoded bytes.
+ */
+export function base64ToBytes(value) {
+    if (typeof value !== "string") {
+        throw new TypeError("Expected a Base64 string");
+    }
+    const binary = atob(value.replace(/\s+/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i &lt; binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
+/**
+ * Computes SHA3-256 over the supplied bytes.
+ *
+ * @param {ArrayBuffer|ArrayBufferView} value Bytes to hash.
+ * @returns {Uint8Array} The 32-byte digest.
+ */
+export function sha3Hash(value) {
+    return new Uint8Array(sha3_256.arrayBuffer(toUint8Array(value)));
+}
+
+/**
+ * Computes `SHA3-256(0x00 || certificateBytes)` and returns Base64.
+ *
+ * @param {ArrayBuffer|ArrayBufferView} certBytes DER certificate bytes.
+ * @returns {string} Base64-encoded leaf hash.
+ */
+export function leafHASH(certBytes) {
+    return bytesToBase64(
+        sha3Hash(concatBytes(new Uint8Array([LEAF_PREFIX]), certBytes))
+    );
+}
+
+/**
+ * Computes `SHA3-256(0x01 || leftHashBytes || rightHashBytes)`.
+ *
+ * @param {string} leftHash Base64-encoded left child hash.
+ * @param {string} rightHash Base64-encoded right child hash.
+ * @returns {string} Base64-encoded parent hash.
+ */
+export function nodeHASH(leftHash, rightHash) {
+    return bytesToBase64(
+        sha3Hash(
+            concatBytes(
+                new Uint8Array([NON_LEAF_PREFIX]),
+                base64ToBytes(leftHash),
+                base64ToBytes(rightHash)
+            )
+        )
+    );
+}
+
+/**
+ * Encodes a timestamp as a Java-compatible signed 64-bit big-endian integer.
+ *
+ * @param {number|bigint|string} timestamp Integer timestamp to encode.
+ * @returns {Uint8Array} The eight-byte signed integer representation.
+ * @throws {RangeError} If the timestamp is unsafe or outside the int64 range.
+ * @throws {TypeError|SyntaxError} If the value cannot be converted to a BigInt.
+ */
+function timestampToBytes(timestamp) {
+    if (typeof timestamp === "number" &amp;&amp; !Number.isSafeInteger(timestamp)) {
+        throw new RangeError("Timestamp must be a safe integer");
+    }
+
+    const value = BigInt(timestamp);
+    const min = -(1n &lt;&lt; 63n);
+    const max = (1n &lt;&lt; 63n) - 1n;
+    if (value &lt; min || value > max) {
+        throw new RangeError("Timestamp must fit in a signed 64-bit integer");
+    }
+
+    const bytes = new Uint8Array(8);
+    new DataView(bytes.buffer).setBigInt64(0, value, false);
+    return bytes;
+}
+
+/**
+ * Computes the raw state digest using the Java-compatible binary layout:
+ * `SHA3-256(0x02 || rootHashBytes || previousStateHashBytes || int64be(timestamp))`.
+ *
+ * @param {string} rootHash Base64-encoded current Merkle root.
+ * @param {string} previousStateHash Base64-encoded previous state hash.
+ * @param {number|bigint|string} timestamp Signed 64-bit timestamp.
+ * @returns {ArrayBuffer} The raw 32-byte state digest.
+ */
+export function stateHASH_raw(rootHash, previousStateHash, timestamp) {
+    return sha3Hash(
+        concatBytes(
+            new Uint8Array([STATE_PREFIX]),
+            base64ToBytes(rootHash),
+            base64ToBytes(previousStateHash),
+            timestampToBytes(timestamp)
+        )
+    ).buffer;
+}
+
+/**
+ * Computes the Java-compatible state hash and encodes it as Base64.
+ *
+ * @param {string} rootHash Base64-encoded current Merkle root.
+ * @param {string} previousStateHash Base64-encoded previous state hash.
+ * @param {number|bigint|string} timestamp Signed 64-bit timestamp.
+ * @returns {string} Base64-encoded state hash.
+ */
+export function stateHASH(rootHash, previousStateHash, timestamp) {
+    return bytesToBase64(stateHASH_raw(rootHash, previousStateHash, timestamp));
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a>
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

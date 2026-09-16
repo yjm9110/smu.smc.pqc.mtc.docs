@@ -1,0 +1,10 @@
+com.smu
+com.smu.example
+com.smu.example.appendonly
+com.smu.example.baseline
+com.smu.mtc
+com.smu.mtc.mtcbean
+com.smu.mtc.mtcbean.appendonly
+com.smu.mtc.mtcbean.baseline
+com.smu.mtc.runner
+com.smu.mysql

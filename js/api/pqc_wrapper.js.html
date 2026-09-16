@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pqc_wrapper.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pqc_wrapper.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * PQC Wrapper (ML-KEM &amp; ML-DSA) powered by Cloudflare CIRCL (via WebAssembly)
+ * 优化版：密钥导入/导出（importSK/exportSK/importPK/exportPK）纯 JS 处理，不经过 WASM。
+ */
+
+import "./wasm_exec.js";
+import pqcWasmUrl from "./pqc.wasm";
+
+let wasmLoaded = false;
+let wasmLoadPromise = null;
+
+/**
+ * A lightweight post-quantum key object used by this wrapper.
+ *
+ * @typedef {Object} PqcKey
+ * @property {"public"|"private"} type Key category.
+ * @property {{name: string}} algorithm Algorithm descriptor.
+ * @property {boolean} extractable Whether the key may be exported.
+ * @property {Uint8Array} _raw Raw key bytes used by the WASM bridge.
+ */
+
+/**
+ * A generated post-quantum key pair.
+ *
+ * @typedef {Object} PqcKeyPair
+ * @property {PqcKey} publicKey Public key.
+ * @property {PqcKey} privateKey Private key.
+ */
+
+/**
+ * 初始化并加载两个 WASM 模块
+ * @async
+ * @returns {Promise&lt;void>}
+ * @throws {Error} 当 WASM 文件加载或初始化失败时抛出错误
+ */
+async function initWasm() {
+    if (wasmLoaded) return;
+    if (wasmLoadPromise) return wasmLoadPromise;
+
+    wasmLoadPromise = (async () => {
+        const go = new Go();
+        try {
+            const [pqcRes] = await Promise.all([
+                WebAssembly.instantiateStreaming(
+                    fetch(new URL(pqcWasmUrl, import.meta.url)),
+                    go.importObject
+                ),
+            ]);
+            
+            go.run(pqcRes.instance);
+            
+            wasmLoaded = true;
+        } catch (err) {
+            console.error("WASM 加载失败: ", err);
+            throw new Error(`WASM initialization failed: ${err.message}`);
+        }
+    })();
+
+    return wasmLoadPromise;
+}
+
+/**
+ * 解析算法名称
+ * @param {Object|string} algorithm - 算法标识对象或字符串
+ * @returns {string} 算法名称字符串
+ */
+function parseAlgName(algorithm) {
+    if (typeof algorithm === "string") return algorithm;
+    if (algorithm &amp;&amp; typeof algorithm.name === "string") return algorithm.name;
+    return "";
+}
+
+// ==========================================
+// ASN.1 / DER 通用解析与打包工具函数 (纯 JS 实现)
+// ==========================================
+
+const OID_MAP = {
+    "ML-KEM-512":  [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x04, 0x01],
+    "ML-KEM-768":  [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x04, 0x02],
+    "ML-KEM-1024": [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x04, 0x03],
+    "ML-DSA-44":   [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x11],
+    "ML-DSA-65":   [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x12],
+    "ML-DSA-87":   [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x13]
+};
+
+/**
+ * 解析 ASN.1 长度字段
+ * @param {Uint8Array} bytes - 字节数组
+ * @param {number} offset - 当前解析偏移量
+ * @returns {{length: number, nextOffset: number}} 包含长度和下一个解析偏移量的对象
+ */
+function parseAsn1Length(bytes, offset) {
+    const firstByte = bytes[offset];
+    if ((firstByte &amp; 0x80) === 0) {
+        return { length: firstByte, nextOffset: offset + 1 };
+    } else {
+        const byteCount = firstByte &amp; 0x7f;
+        let length = 0;
+        for (let i = 0; i &lt; byteCount; i++) {
+            length = (length * 256) + bytes[offset + 1 + i];
+        }
+        return { length: length, nextOffset: offset + 1 + byteCount };
+    }
+}
+
+/**
+ * 编码 ASN.1 长度字段
+ * @param {number} len - 数值长度
+ * @returns {Uint8Array} DER 编码的长度字节数组
+ */
+function encodeLength(len) {
+    if (len &lt; 128) {
+        return new Uint8Array([len]);
+    } else if (len &lt; 256) {
+        return new Uint8Array([0x81, len]);
+    } else if (len &lt; 65536) {
+        return new Uint8Array([0x82, len >> 8, len &amp; 0xff]);
+    } else {
+        return new Uint8Array([0x83, len >> 16, (len >> 8) &amp; 0xff, len &amp; 0xff]);
+    }
+}
+
+/**
+ * 拼接多个 Uint8Array
+ * @param {...Uint8Array} arrays - 多个字节数组
+ * @returns {Uint8Array} 拼接后的完整字节数组
+ */
+function concatBytes(...arrays) {
+    const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+    }
+    return result;
+}
+
+/**
+ * 从 SPKI 格式中提取公钥 Raw 字节 (纯 JS)
+ * @param {ArrayBuffer|Uint8Array} spkiData - SPKI 二进制数据
+ * @returns {Uint8Array} 纯公钥 Raw 字节
+ */
+function _extractRawPubKey(spkiData) {
+    const bytes = new Uint8Array(spkiData);
+    if (bytes[0] !== 0x30) return bytes;
+    let offset = 1;
+    let lenInfo = parseAsn1Length(bytes, offset);
+    offset = lenInfo.nextOffset;
+
+    if (bytes[offset] !== 0x30) return bytes;
+    offset += 1;
+    lenInfo = parseAsn1Length(bytes, offset);
+    offset = lenInfo.nextOffset + lenInfo.length;
+
+    if (bytes[offset] !== 0x03) return bytes;
+    offset += 1;
+    lenInfo = parseAsn1Length(bytes, offset);
+    offset = lenInfo.nextOffset;
+
+    const unusedBits = bytes[offset];
+    offset += 1;
+    const rawLen = lenInfo.length - 1 - (unusedBits > 0 ? 1 : 0);
+    return bytes.slice(offset, offset + rawLen);
+}
+
+/**
+ * 导入 CryptoKey 公钥（纯 JS 处理，不经过 WASM）
+ * @param {string} format - 格式 ("spki" 或 "raw"), default = "raw"
+ * @param {ArrayBuffer} keyData - 公钥二进制数据
+ * @param {Object|string} algorithm - 算法标识
+ * @returns {Object} 返回 CryptoKey 公钥对象
+ * @throws {Error} 当参数无效时抛出错误
+ */
+function _importPK(format, keyData, algorithm) {
+    const algName = parseAlgName(algorithm);
+    if (!keyData) throw new Error("Invalid keyData provided to importPK");
+    const bytes = new Uint8Array(keyData);
+    const rawBytes = (format === "spki") ? _extractRawPubKey(bytes) : bytes;
+
+    return {
+        type: "public",
+        algorithm: { name: algName },
+        extractable: true,
+        _raw: rawBytes
+    };
+}
+
+/**
+ * 从 PKCS#8 结构中提取原始私钥字节，并兼容 Bouncy Castle 的嵌套结构。
+ *
+ * @param {ArrayBuffer|ArrayBufferView} pkcs8Data PKCS#8 二进制数据。
+ * @returns {Uint8Array} 提取出的原始私钥；无法识别外层结构时返回全部字节。
+ */
+function _extractRawPrivKey(pkcs8Data) {
+    const bytes = new Uint8Array(pkcs8Data);
+    if (bytes[0] !== 0x30) return bytes;
+    
+    let offset = 1;
+    let lenInfo = parseAsn1Length(bytes, offset);
+    offset = lenInfo.nextOffset;
+
+    // 1. 跳过 Version (0x02)
+    if (bytes[offset] === 0x02) {
+        offset += 1;
+        lenInfo = parseAsn1Length(bytes, offset);
+        offset = lenInfo.nextOffset + lenInfo.length;
+    }
+
+    // 2. 跳过 AlgorithmIdentifier (0x30)
+    if (bytes[offset] === 0x30) {
+        offset += 1;
+        lenInfo = parseAsn1Length(bytes, offset);
+        offset = lenInfo.nextOffset + lenInfo.length;
+    }
+
+    // 3. 遇到 PrivateKey 的外层 OCTET STRING (0x04)
+    if (bytes[offset] === 0x04) {
+        offset += 1;
+        lenInfo = parseAsn1Length(bytes, offset);
+        offset = lenInfo.nextOffset;
+        
+        // 兼容处理：检查里面是否被 Bouncy Castle 多包裹了一层 OCTET STRING (0x04)
+        if (bytes[offset] === 0x30) {
+            offset += 1;
+            lenInfo = parseAsn1Length(bytes, offset);
+            offset = lenInfo.nextOffset;
+            if (bytes[offset] === 0x04){
+                // 64 bytes seed.
+                offset += 1;
+                lenInfo = parseAsn1Length(bytes, offset);
+                offset = lenInfo.nextOffset + lenInfo.length;
+            }
+            if (bytes[offset] === 0x04){
+                offset += 1;
+                lenInfo = parseAsn1Length(bytes, offset);
+                offset = lenInfo.nextOffset;
+            }
+        }
+        const raw_end = bytes.length;
+        return bytes.slice(offset, raw_end);
+    }
+
+    return bytes;
+}
+
+/**
+ * 导入 CryptoKey 私钥（纯 JS 处理，不经过 WASM）
+ * @param {string} format - 格式 ("pkcs8" 或 "raw"), default = "raw"
+ * @param {ArrayBuffer} keyData - 密钥二进制数据
+ * @param {Object|string} algorithm - 算法标识
+ * @returns {Object} 返回 CryptoKey 私钥对象
+ * @throws {Error} 当参数无效时抛出错误
+ */
+function _importSK(format, keyData, algorithm) {
+    const algName = parseAlgName(algorithm);
+    if (!keyData) throw new Error("Invalid keyData provided to importSK");
+    const bytes = new Uint8Array(keyData);
+    // console.log("bytes: ", bytes.length, algName);
+    const rawBytes = (format === "pkcs8") ? _extractRawPrivKey(bytes) : bytes;
+    // console.log("rawBytes: ", rawBytes.length, algName);
+    return {
+        type: "private",
+        algorithm: { name: algName },
+        extractable: true,
+        _raw: rawBytes
+    };
+}
+
+/**
+ * 为公钥包裹 SPKI 外壳 (纯 JS)
+ * @param {string} algName - 算法名称
+ * @param {Uint8Array} rawPubKeyBytes - 纯公钥 Raw 字节
+ * @returns {Uint8Array} 带有 SPKI 外壳的字节数组
+ */
+function _wrapSpki(algName, rawPubKeyBytes) {
+    const oid = OID_MAP[algName];
+    if (!oid) return rawPubKeyBytes;
+    const algIdContent = new Uint8Array([0x06, oid.length, ...oid]);
+    const algIdSeq = concatBytes(new Uint8Array([0x30, algIdContent.length]), algIdContent);
+    const bitStringContent = concatBytes(new Uint8Array([0x00]), rawPubKeyBytes);
+    const bitStringTag = concatBytes(new Uint8Array([0x03]), encodeLength(bitStringContent.length));
+    const bitStringField = concatBytes(bitStringTag, bitStringContent);
+    const spkiContent = concatBytes(algIdSeq, bitStringField);
+    const spkiSeqTag = concatBytes(new Uint8Array([0x30]), encodeLength(spkiContent.length));
+    return concatBytes(spkiSeqTag, spkiContent);
+}
+
+/**
+ * 为私钥包裹 PKCS#8 外壳 (纯 JS)
+ * @param {string} algName - 算法名称
+ * @param {Uint8Array} rawPrivKeyBytes - 纯私钥 Raw 字节
+ * @returns {Uint8Array} 带有 PKCS#8 外壳的字节数组
+ */
+function _wrapPkcs8(algName, rawPrivKeyBytes) {
+    const oid = OID_MAP[algName];
+    if (!oid) return rawPrivKeyBytes;
+    const version = new Uint8Array([0x02, 0x01, 0x00]);
+    const algIdContent = new Uint8Array([0x06, oid.length, ...oid]);
+    const algIdSeq = concatBytes(new Uint8Array([0x30, algIdContent.length]), algIdContent);
+    const octetTag = concatBytes(new Uint8Array([0x04]), encodeLength(rawPrivKeyBytes.length));
+    const octetField = concatBytes(octetTag, rawPrivKeyBytes);
+    const pkcs8Content = concatBytes(version, algIdSeq, octetField);
+    const pkcs8SeqTag = concatBytes(new Uint8Array([0x30]), encodeLength(pkcs8Content.length));
+    return concatBytes(pkcs8SeqTag, pkcs8Content);
+}
+
+/**
+ * 导出 CryptoKey 密钥（纯 JS 处理，不经过 WASM）
+ * @param {string} format - 格式 ("pkcs8", "spki" 或 "raw"), default = "raw"
+ * @param {Object} key - CryptoKey 对象
+ * @returns {ArrayBuffer} 返回密钥的二进制数据
+ * @throws {Error} 当 key 对象无效时抛出错误
+ */
+function exportKey(format, key) {
+    if (!key || !key._raw) throw new Error("Invalid key object provided to exportKey");
+    const rawBytes = new Uint8Array(key._raw);
+    if (format === "spki") {
+        const wrapped = _wrapSpki(key.algorithm.name, rawBytes);
+        return wrapped.buffer;
+    } else if (format === "pkcs8") {
+        const wrapped = _wrapPkcs8(key.algorithm.name, rawBytes);
+        return wrapped.buffer;
+    }
+    return rawBytes.buffer;
+}
+
+
+// ==========================================
+// ML-KEM 包装对象
+// ==========================================
+/**
+ * 提供 ML-KEM 密钥生成、导入导出、封装和解封装操作。
+ *
+ * @namespace mlkem
+ */
+const mlkem = {
+    /**
+     * 生成 ML-KEM 密钥对
+     * @param {Object|string} algorithm - 算法标识
+     * @param {boolean} [extractable=true] - 是否可导出
+     * @returns {Promise&lt;PqcKeyPair>} 返回包含 publicKey 和 privateKey 的对象
+     * @throws {Error} 当 WASM 未就绪或生成失败时抛出错误
+     */
+    async generateKey(algorithm, extractable = true) {
+        await initWasm();
+        const algName = parseAlgName(algorithm);
+        const res = globalThis.goMlkemGenerateKey(algName);
+        if (typeof res === "string") throw new Error(res);
+
+        return {
+            publicKey: { type: "public", algorithm: { name: algName }, extractable, _raw: res.pk },
+            privateKey: { type: "private", algorithm: { name: algName }, extractable, _raw: res.sk }
+        };
+    },
+
+    /**
+     * 从私钥中派生出对应的公钥对象
+     * @param {Object} privateKey - KEM 私钥对象
+     * @returns {Promise&lt;PqcKey>} 返回 KEM 公钥对象
+     * @throws {Error} 当 WASM 未就绪或派生失败时抛出错误
+     */
+    async getPK(privateKey) {
+        await initWasm();
+        const res = globalThis.goMlkemGetPK(privateKey.algorithm.name, privateKey._raw);
+        if (typeof res === "string") throw new Error(res);
+        return {
+            type: "public",
+            algorithm: privateKey.algorithm,
+            extractable: privateKey.extractable,
+            _raw: res
+        };
+    },
+
+    /**
+     * 导入 KEM 私钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("pkcs8" 或 "raw")
+     * @param {ArrayBuffer} keyData - 密钥二进制数据
+     * @param {Object|string} algorithm - 算法标识
+     * @returns {PqcKey} 返回 KEM 私钥对象
+     * @throws {Error} 当参数无效时抛出错误
+     */
+    importSK(format, keyData, algorithm) {
+        return _importSK(format, keyData, algorithm);
+    },
+
+    /**
+     * 导出 KEM 私钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("pkcs8" 或 "raw")
+     * @param {Object} key - KEM 私钥对象
+     * @returns {ArrayBuffer} 返回密钥的二进制数据
+     * @throws {Error} 当 key 对象无效时抛出错误
+     */
+    exportSK(format, key) {
+        return exportKey(format, key);
+    },
+
+    /**
+     * 导入 KEM 公钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("spki" 或 "raw")
+     * @param {ArrayBuffer} keyData - 公钥二进制数据
+     * @param {Object|string} algorithm - 算法标识
+     * @returns {PqcKey} 返回 KEM 公钥对象
+     * @throws {Error} 当参数无效时抛出错误
+     */
+    importPK(format, keyData, algorithm) {
+        return _importPK(format, keyData, algorithm);
+    },
+
+    /**
+     * 导出 KEM 公钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("spki" 或 "raw")
+     * @param {Object} key - KEM 公钥对象
+     * @returns {ArrayBuffer} 返回公钥的二进制数据
+     * @throws {Error} 当 key 对象无效时抛出错误
+     */
+    exportPK(format, key) {
+        return exportKey(format, key);
+    },
+
+    /**
+     * 封装密钥 (Encapsulate)
+     * @param {Object|string} algorithm - 算法标识
+     * @param {Object} publicKey - KEM 公钥对象
+     * @returns {Promise&lt;{ct: ArrayBuffer, ss: ArrayBuffer}>} 返回包含 ciphertext 和 plaintext（共享密钥）的 ArrayBuffer 对象
+     * @throws {Error} 当 WASM 未就绪或封装失败时抛出错误
+     */
+    async encapsulate(algorithm, publicKey) {
+        await initWasm();
+        const algName = parseAlgName(algorithm) || publicKey.algorithm.name;
+        const res = globalThis.goMlkemEncapsulate(algName, publicKey._raw);
+        if (typeof res === "string") throw new Error(res);
+        const ct = res.ciphertext.buffer;
+        const ss = res.plaintext.buffer;
+        return { ct, ss };
+    },
+
+    /**
+     * 解封装密钥 (Decapsulate)
+     * @param {Object|string} algorithm - 算法标识
+     * @param {Object} privateKey - KEM 私钥对象
+     * @param {ArrayBuffer} ciphertext - 密文二进制数据
+     * @returns {Promise&lt;Uint8Array>} 返回解封装后的共享密钥字节
+     * @throws {Error} 当 WASM 未就绪或解封装失败时抛出错误
+     */
+    async decapsulate(algorithm, privateKey, ciphertext) {
+        await initWasm();
+        // console.log("privateKey: ", privateKey);
+        // console.log("privateKey._raw: ", privateKey._raw);
+        const algName = parseAlgName(algorithm) || privateKey.algorithm.name;
+        const cipherBytes = new Uint8Array(ciphertext);
+        const res = globalThis.goMlkemDecapsulate(algName, privateKey._raw, cipherBytes);
+        if (typeof res === "string") throw new Error(res);
+        return res;
+    }
+};
+
+// ==========================================
+// ML-DSA 包装对象
+// ==========================================
+/**
+ * 提供 ML-DSA 密钥生成、导入导出、签名和验签操作。
+ *
+ * @namespace mldsa
+ */
+const mldsa = {
+    /**
+     * 生成 ML-DSA 密钥对
+     * @param {Object|string} algorithm - 算法标识
+     * @param {boolean} [extractable=true] - 是否可导出
+     * @returns {Promise&lt;PqcKeyPair>} 返回包含 publicKey 和 privateKey 的对象
+     * @throws {Error} 当 WASM 未就绪或生成失败时抛出错误
+     */
+    async generateKey(algorithm, extractable = true) {
+        await initWasm();
+        const algName = parseAlgName(algorithm);
+        const res = globalThis.goMldsaGenerateKey(algName);
+        if (typeof res === "string") throw new Error(res);
+
+        return {
+            publicKey: { type: "public", algorithm: { name: algName }, extractable, _raw: res.pk },
+            privateKey: { type: "private", algorithm: { name: algName }, extractable, _raw: res.sk }
+        };
+    },
+
+    /**
+     * 从 DSA 私钥中获取公钥
+     * @param {Object} privateKey - DSA 私钥对象
+     * @returns {Promise&lt;PqcKey>} 返回 DSA 公钥对象
+     * @throws {Error} 当 WASM 未就绪或获取失败时抛出错误
+     */
+    async getPK(privateKey) {
+        await initWasm();
+        const res = globalThis.goMldsaGetPK(privateKey.algorithm.name, privateKey._raw);
+        if (typeof res === "string") throw new Error(res);
+        return {
+            type: "public",
+            algorithm: privateKey.algorithm,
+            extractable: privateKey.extractable,
+            _raw: res
+        };
+    },
+
+    /**
+     * 导入 DSA 私钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("pkcs8" 或 "raw")
+     * @param {ArrayBuffer} keyData - 密钥二进制数据
+     * @param {Object|string} algorithm - 算法标识
+     * @returns {PqcKey} 返回 DSA 私钥对象
+     * @throws {Error} 当参数无效时抛出错误
+     */
+    importSK(format, keyData, algorithm) {
+        return _importSK(format, keyData, algorithm);
+    },
+
+    /**
+     * 导出 DSA 私钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("pkcs8" 或 "raw")
+     * @param {Object} key - DSA 私钥对象
+     * @returns {ArrayBuffer} 返回密钥的二进制数据
+     * @throws {Error} 当 key 对象无效时抛出错误
+     */
+    exportSK(format, key) {
+        return exportKey(format, key);
+    },
+
+    /**
+     * 导入 DSA 公钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("spki" 或 "raw")
+     * @param {ArrayBuffer} keyData - 公钥二进制数据
+     * @param {Object|string} algorithm - 算法标识
+     * @returns {PqcKey} 返回 DSA 公钥对象
+     * @throws {Error} 当参数无效时抛出错误
+     */
+    importPK(format, keyData, algorithm) {
+        return _importPK(format, keyData, algorithm);
+    },
+
+    /**
+     * 导出 DSA 公钥（纯 JS 处理，不经过 WASM）
+     * @param {string} format - 格式 ("spki" 或 "raw")
+     * @param {Object} key - DSA 公钥对象
+     * @returns {ArrayBuffer} 返回公钥的二进制数据
+     * @throws {Error} 当 key 对象无效时抛出错误
+     */
+    exportPK(format, key) {
+        return exportKey(format, key);
+    },
+
+    /**
+     * 数字签名 (Sign)
+     * @param {Object} privateKey - DSA 私钥对象
+     * @param {ArrayBuffer} message - 需要签名的消息二进制数据
+     * @returns {Promise&lt;ArrayBuffer>} 返回签名二进制数据
+     * @throws {Error} 当 WASM 未就绪或签名失败时抛出错误
+     */
+    async sign(privateKey, message) {
+        await initWasm();
+        const msgBytes = new Uint8Array(message);
+        const res = globalThis.goMldsaSign(privateKey.algorithm.name, privateKey._raw, msgBytes);
+        if (typeof res === "string") throw new Error(res);
+        return res.buffer;
+    },
+
+    /**
+     * 验证签名 (Verify)
+     * @param {Object} publicKey - DSA 公钥对象
+     * @param {ArrayBuffer} signature - 签名二进制数据
+     * @param {ArrayBuffer} message - 消息二进制数据
+     * @returns {Promise&lt;boolean>} 返回验签结果
+     * @throws {Error} 当 WASM 未就绪或验签过程出错时抛出错误
+     */
+    async verify(publicKey, signature, message) {
+        await initWasm();
+        const sigBytes = new Uint8Array(signature);
+        const msgBytes = new Uint8Array(message);
+        const res = globalThis.goMldsaVerify(publicKey.algorithm.name, publicKey._raw, sigBytes, msgBytes);
+        if (typeof res === "string") throw new Error(res);
+        return res;
+    }
+};
+
+// 立即触发初始化
+initWasm();
+
+export { mlkem, mldsa };
+export default { mlkem, mldsa };
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a>
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

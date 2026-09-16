@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Tutorial: quick-start</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Tutorial: quick-start</h1>
+
+    <section>
+
+<header>
+    
+
+    <h2>quick-start</h2>
+</header>
+
+<article>
+    <h1>Quick Start Guide</h1>
+<p>This guide demonstrates how to execute a simulated end-to-end cryptographic workflow integrating ML-KEM, digital certificates, and AES encryption using the <code>pqc_funcs</code> library.</p>
+<h2>End-to-End Workflow Example</h2>
+<p>The following script covers:</p>
+<ol>
+<li>Generating client-side ML-KEM keys.</li>
+<li>Managing and verifying Admin and User certificates.</li>
+<li>Encrypting a payload using AES-GCM combined with ML-KEM encapsulation.</li>
+<li>Handling re-encryption and decapsulation flows.</li>
+</ol>
+<pre class="prettyprint source lang-javascript"><code>// Import the WebAssembly-based ML-KEM cryptographic provider library
+import pqc_funcs from './lib/pqc-lib.js';
+
+const adminCertPem = &quot;-----BEGIN ADMIN CERTIFICATE-----MIIVwDCCCL2gAwIBAgIQXdcKqB9Yw+h...-----END ADMIN CERTIFICATE-----\n&quot;;
+const userCertPem = &quot;-----BEGIN USER CERTIFICATE-----dtPXNzhXXoSLmf3+AAAAAAAAAAAAAAAAAAAGDBEaICk...-----END USER CERTIFICATE-----\n&quot;;
+const userSKPem = &quot;-----BEGIN USER KEM PRIVATE KEY-----MIIJvgIBADALBglghkgBZQMEBAIEggmqMIIJpgRAP/544kgzM0T7oOqh52kmkVPN...-----END USER KEM PRIVATE KEY-----\n&quot;;
+const raw_proofJSONStr = '{&quot;duration&quot;:10,&quot;proofNodes&quot;:[{&quot;isLeft&quot;:true,&quot;hash&quot;:&quot;hRNIdH4AmKLdAhZDxmTkeyXFu5m6GUO+30PD1KAm4xM=&quot;}],&quot;curStateSig&quot;:&quot;-----BEGIN SIGNATURE ON MTC STATE-----...-----END SIGNATURE ON MTC STATE-----\n&quot;,&quot;userCertPem&quot;:&quot;-----BEGIN USER CERTIFICATE-----...-----END USER CERTIFICATE-----\n&quot;,&quot;preStateHash&quot;:&quot;tyzpoEDaZUUtCcsnbHEm+YWr+rDRxgs0tNocGEODJAI=&quot;,&quot;timestamp&quot;:160}';
+// Sanitize illegal control characters in the string. 
+// This is necessary because the mock 'proofJSONStr' was copied directly from a Java console output where newline characters were escaped. 
+// Therefore, the literal '\n' sequence must be restored to an actual newline character for proper JSON parsing.
+// Note: This sanitation step is unnecessary if the payload is transmitted via binary protocols, HTTP, or direct file transfer.
+const proofJSONStr = raw_proofJSONStr.replace(/\n/g, &quot;\\n&quot;).replace(/\r/g, &quot;\\r&quot;);
+
+/**
+ * Executes a simulated end-to-end cryptographic workflow integrating KEM, digital certificates, and AES encryption.
+ * @tutorial quick-start
+ * @returns {Promise&lt;void>}
+ */
+export async function test_work_flow() {
+    // Generate a fresh client-side ML-KEM key pair for original enc-dec; another pair of kem keys (extractedKemPK, extractedKemSK) will be extracted for re-encryption
+    const { publicKey: kemPK, privateKey: kemSK } = await pqc_funcs.kemKeyGen();
+
+    // +++++++++Send CSR to Admin+++++++++
+    // Export the KEM public key into PEM format for CSR inclusion
+    const kemPKPem = await pqc_funcs.exportKemPKToPem(kemPK);
+    // Construct a simulated certificate signing request (CSR) payload block
+    const csr = { &quot;user_id&quot;: 123, &quot;kemPK&quot;: kemPKPem };
+
+    // +++++++++Get User Cert From Server+++++++++
+    // Simulate obtaining a signed user certificate string from the administrative authority
+    const userCert = pqc_funcs.decodeCertFromPem(userCertPem);
+
+    // +++++++++Check Expiration of User Cert+++++++++
+    // Evaluate if the user certificate is active or has expired
+    if (!pqc_funcs.isCertExpired(userCert))
+        console.log(&quot;User cert is not expired&quot;);
+    else
+        console.log(&quot;User cert is expired&quot;);
+
+    // +++++++++Get Admin Cert From Server+++++++++
+    // Simulate obtaining the self-issued Admin root CA certificate
+    const adminCert = pqc_funcs.decodeCertFromPem(adminCertPem);
+
+    // +++++++++Check Correctness of Admin Cert+++++++++
+    // 1. Evaluate if the admin root certificate is active or expired
+    if (!pqc_funcs.isCertExpired(adminCert))
+        console.log(&quot;Admin cert is not expired&quot;);
+    else
+        console.log(&quot;Admin cert is expired&quot;);
+
+    // 2. Validate that the admin certificate possesses valid CA permissions
+    pqc_funcs.isCACert(adminCert);
+
+    // +++++++++Get Admin MLDSA PK+++++++++
+    // Extract the administrative ML-DSA public key from its certificate for proof verification and user certificate validation
+    const adminDsaPK = await pqc_funcs.extractAdminDsaPK(adminCert);
+    console.log(&quot;Loaded Admin dsa PK&quot;, adminDsaPK);
+
+    // +++++++++Get User MLKEM PK+++++++++
+    // Extract the embedded ML-KEM public key from the user certificate for continuity encryption/re-encryption operations
+    const extractKemPK = await pqc_funcs.extractUserKemPK(userCert);
+    console.log(&quot;Loaded User kem PK&quot;, extractKemPK);
+
+    // +++++++++Verify User Cert+++++++++
+    // Perform signature verification on the user certificate using the admin public key
+    if (await pqc_funcs.verifyUserCert(userCert, adminDsaPK)) {
+        console.log(&quot;User certificate verification passed&quot;);
+    } else {
+        console.log(&quot;User certificate verification failed&quot;);
+    }
+
+    // +++++++++Verify Membership Proof+++++++++
+    // The timestamp is specified by the user to verify the certificate's membership validity at a specific point in time.
+    const time = 160;
+    if(pqc_funcs.verifyMemberProof(proofJSONStr, adminDsaPK, time))
+        console.log(&quot;Proof Passed!!!!!!!&quot;);
+    else
+        console.log(&quot;Proof Unpassed!!!!!!!&quot;);
+
+    // +++++++++Test PQC encryption decryption+++++++++
+    // +++++++++ENC MSG+++++++++
+    // Prepare a plain text message payload to encrypt
+    const msg = new TextEncoder().encode(&quot;Hello world&quot;);
+    // Sample a 256-bit AES symmetric key for encrypting the message payload
+    const aesKey = await aes_random_key_gen();
+    // Encapsulate the aesKey using the original KEM public key kemPK
+    const { ssCT, aesCT } = await mlkem_enc_with_aesKey(kemPK, aesKey);
+    // Encrypt the target message payload using the aesKey with AES-GCM symmetric encryption
+    const msgCT = await aes_enc(msg, aesKey);
+
+    // +++++++++Re-ENC MSG+++++++++
+    // Re-encapsulate the aesKey using the new KEM public key extractKemPK
+    const { ssCT: reEncSSCT, aesCT: reEncAESCT } = await mlkem_re_enc_with_aesKey(kemSK, ssCT, aesCT, extractKemPK);
+
+    // +++++++++DEC MSG+++++++++
+    // Decrypt using the original KEM private key (kemSK)
+    const recoveredAesKey = await mlkem_dec_with_aesKey(kemSK, ssCT, aesCT);
+    for(var i = 0; i &lt; 32; i++){
+        if (aesKey.at(i) != recoveredAesKey.at(i)){
+            console.error(&quot;Original KEM Decrypt Failed&quot;, i);
+            break;
+        }
+    }
+
+    // +++++++++DEC MSG for RE-ENC+++++++++
+    // Load the KEM SK for the re-encrypted ciphertext's decryption 
+    const extractedKemSK = pqc_funcs.importKemSkFromPem(userSKPem);
+    console.log(&quot;Loaded User kem SK&quot;, extractedKemSK);
+    // Decrypt using the extracted KEM SK for the re-encrypted ciphertext
+    const recoveredAesKey2 = await mlkem_dec_with_aesKey(extractedKemSK, reEncSSCT, reEncAESCT);
+    for(var i = 0; i &lt; 32; i++){
+        if (aesKey.at(i) != recoveredAesKey2.at(i)){
+            console.error(&quot;Re-encrypted KEM Decrypt Failed&quot;, i);
+            break;
+        }
+    }
+
+    // Decrypt the transmission ciphertext bytes back into raw plaintext bytes using the recovered session key
+    const decryptedMsgBytes = await aes_dec(msgCT, recoveredAesKey);
+
+    // Decode the decrypted bytes and the original payload bytes into strings for final verification
+    const decryptedText = new TextDecoder().decode(decryptedMsgBytes);
+    const originalText = new TextDecoder().decode(msg);
+
+    // Compare plaintexts to confirm successful end-to-end data transmission
+    if (decryptedText === originalText) {
+        console.log(&quot;Decrypt successfully:&quot;, decryptedText);
+    } else {
+        console.log(&quot;Decrypt failed&quot;);
+    }
+}
+
+</code></pre>
+<h2>Encryption and Re-Encryption functions</h2>
+<p>Encryption with a given AES key. It firstly calls mlkem to generate a secret share and its mlkem ciphertext, then uses this secret share to encrypt the given AES key by AES-GCM.</p>
+<pre class="prettyprint source lang-javascript"><code>/**
+ * 
+ * @param {CryptoKey} kemPK - The recipient's ML-KEM public key.
+ * @param {ArrayBuffer} aesKey - The symmetric AES key to be encrypted.
+ * @returns {Promise&lt;{ssCT: ArrayBuffer, aesCT: ArrayBuffer}>} The generated shared secret ciphertext and AES key ciphertext.
+ */
+async function mlkem_enc_with_aesKey(kemPK, aesKey) {
+    // Invoke the ML-KEM encapsulation routine to produce ciphertext and a shared key
+    const { ct:ssCT, ss:ss } = await pqc_funcs.mlkem_enc(kemPK);
+    // Encrypt the provided AES key using the derived shared session key
+    const aesCT = await aes_enc(aesKey, ss);
+    // Return the ciphertext and symmetric key mapping object
+    return { ssCT, aesCT }
+}
+</code></pre>
+<p>Decryption. It firstly calls mlkem to decrypt mlkem's ciphertext to recover the secret share and then uses it to decrypt the aes ciphertext to recover the AES Key.</p>
+<pre class="prettyprint source lang-javascript"><code>
+/**
+ * @param {CryptoKey} kemSK - The recipient's ML-KEM private key.
+ * @param {ArrayBuffer} ssCT - The ML-KEM ciphertext.
+ * @param {ArrayBuffer} aesCT - The AES ciphertext.
+ * @returns {Promise&lt;ArrayBuffer>} The decrypted AES key bytes.
+ */
+async function mlkem_dec_with_aesKey(kemSK, ssCT, aesCT) {
+    // Invoke the ML-KEM decapsulation routine to recover the shared session key
+    const recoveredSS = await pqc_funcs.mlkem_dec(ssCT, kemSK);
+    // Decrypt the AES key ciphertext using the recovered shared session key
+    const recoveredAESKey = await aes_dec(aesCT, recoveredSS);
+    // Return the decrypted AES key bytes
+    return recoveredAESKey;
+}
+</code></pre>
+<p>Re-Encryption. It firstly decrypts using the original kemSK and then encrypts using the new kemPK.</p>
+<pre class="prettyprint source lang-javascript"><code>
+/**
+ * 
+ * @param {CryptoKey} kemSK - The original ML-KEM private key used to decapsulate the original ciphertext.
+ * @param {ArrayBuffer} ssCT - The ML-KEM ciphertext, which encapsulates the shared session key ss.
+ * @param {ArrayBuffer} aesCT - The AES key's ciphertext, encrypted by ss using AES-GCM.
+ * @param {CryptoKey} newKemPK - The new ML-KEM public key to re-encapsulate the recovered AES key.
+ * @returns {Promise&lt;{ssCT: ArrayBuffer, aesCT: ArrayBuffer}>}
+ */
+async function mlkem_re_enc_with_aesKey(kemSK, ssCT, aesCT, newKemPK) {
+    // Decapsulate the original ML-KEM ciphertext to recover the encrypted AES key.
+    const recoveredAESKey = await mlkem_dec_with_aesKey(kemSK, ssCT, aesCT);
+    // Re-encapsulate the AES key with the new ML-KEM public key
+    return await mlkem_enc_with_aesKey(newKemPK, recoveredAESKey);
+}
+</code></pre>
+<h2>Generate PQC Function Masm Library</h2>
+<p>We provided a compiled wasm library <code>pqc.wasm</code>. You also can generate your own wasm library by running:</p>
+<pre class="prettyprint source"><code>npm run build:wasm
+</code></pre>
+</article>
+
+</section>
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a>
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

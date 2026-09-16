@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JavaScript guide</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+    body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid #aaa6; padding-bottom: 1rem; }
+    a { color: #2867b2; } table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #aaa6; padding: .55rem; text-align: left; }
+    pre { overflow-x: auto; padding: 1rem; background: #8882; border-radius: .4rem; }
+    code { overflow-wrap: anywhere; } img { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <nav aria-label="Documentation"><a href="../index.html">Overview</a><a href="../java/index.html">Java guide</a><a href="../js/index.html">JavaScript guide</a></nav>
+  <main><h1 id="pqc-file-sharing-system-client-js">PQC File Sharing System (Client JS)</h1>
+<p>This directory contains the browser-side cryptographic library for the PQC File
+Sharing System. It uses WebAssembly-based ML-KEM and ML-DSA together with
+PKI.js, ASN.1.js, and js-sha3.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>Node.js 22 or newer; Node.js 24 LTS is recommended</li>
+<li>npm, included with the official Node.js distribution</li>
+<li>Go only when rebuilding <code>src/pqc.wasm</code> from <code>wasm/</code></li>
+</ul>
+<h2 id="install-dependencies-and-build">Install dependencies and build</h2>
+<pre><code class="language-bash">npm install
+npm run build
+</code></pre>
+<p>The build produces two files in <code>dist/</code>:</p>
+<pre><code class="language-text">dist/
+├── pqc-lib.js
+└── pqc.wasm
+</code></pre>
+<p>Keep these two files in the same directory. The JavaScript module loads the
+WebAssembly file relative to itself.</p>
+<h2 id="run-tests">Run tests</h2>
+<pre><code class="language-bash">npm test
+</code></pre>
+<p>The structural tests verify that source imports still resolve after directory
+changes, the npm build uses <code>src/index.js</code>, and the browser demo loads the
+generated distribution.</p>
+<h2 id="rebuild-webassembly">Rebuild WebAssembly</h2>
+<p>The repository includes the compiled <code>src/pqc.wasm</code> used by the normal JS
+build. If Go is installed and the Go implementation changes, rebuild it with:</p>
+<pre><code class="language-bash">npm run build:wasm
+</code></pre>
+<h2 id="run-the-html-demo">Run the HTML demo</h2>
+<p>Serve this directory with a local HTTP server and open <code>demo/index.html</code>. The
+demo imports <code>test_work_flow</code> from the same bundled library distributed to
+users. Opening the HTML file directly with a <code>file://</code> URL is not supported
+because the browser must fetch the WebAssembly asset.</p>
+<h2 id="generate-api-documentation">Generate API documentation</h2>
+<pre><code class="language-bash">npm run docs
+</code></pre>
+<p>The generated documentation is written to <code>../docs-site/js/api/</code>. Its overview page is built
+directly from this README, so installation, demo, and Chrome extension guidance
+remain synchronized with the repository documentation.
+Browse the published <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/js/api/">JavaScript API reference</a>.</p>
+<h2 id="use-in-a-chrome-extension">Use in a Chrome extension</h2>
+<p>Copy both files from <code>dist/</code> into the extension, for example:</p>
+<pre><code class="language-text">extension/
+├── manifest.json
+├── background.js
+└── lib/
+    ├── pqc-lib.js
+    └── pqc.wasm
+</code></pre>
+<p>Configure a Manifest V3 module service worker:</p>
+<pre><code class="language-json">{
+  &quot;background&quot;: {
+    &quot;service_worker&quot;: &quot;background.js&quot;,
+    &quot;type&quot;: &quot;module&quot;
+  }
+}
+</code></pre>
+<p>Then import the required API without modifying this library&#39;s source:</p>
+<pre><code class="language-javascript">import {
+  kemKeyGen,
+  exportKemPKToPem,
+  decodeCertFromPem,
+  isCertExpired,
+  isCACert,
+  extractAdminDsaPK,
+  extractUserKemPK,
+  importKemSkFromPem,
+  verifyUserCert,
+  verifyMemberProof,
+  aes_random_key_gen,
+  mlkem_enc_with_aesKey,
+  mlkem_dec_with_aesKey,
+  mlkem_re_enc_with_aesKey,
+  aes_enc,
+  aes_dec
+} from &quot;./lib/pqc-lib.js&quot;;
+</code></pre>
+<p>This is the complete set of public APIs called directly by <code>test_work_flow</code>.
+Import only the subset needed by an extension in production code.</p>
+<p><code>src/index.js</code> is the single source-level public entry point.
+<code>src/pqc_funcs.js</code> contains the reusable cryptographic API, while
+<code>src/examples.js</code> contains the exported end-to-end example workflow.</p>
+<h2 id="project-structure">Project structure</h2>
+<pre><code class="language-text">js/
+├── src/                        Publishable JavaScript source and runtime assets
+│   ├── index.js                Public library entry point
+│   ├── pqc_funcs.js            Certificates, proofs, ML-KEM, and AES APIs
+│   ├── hash_utils.js           Java-compatible MTC hash calculations
+│   ├── pqc_wrapper.js          JavaScript bridge to WebAssembly
+│   ├── examples.js             Exported end-to-end workflow
+│   ├── wasm_exec.js            Go WebAssembly runtime
+│   └── pqc.wasm                Compiled ML-KEM and ML-DSA module
+├── scripts/                    Executable development and build scripts
+│   ├── build-wasm.sh           Rebuilds src/pqc.wasm from Go source
+│   └── generate-docs.mjs       Generates and validates JSDoc
+├── wasm/                       Go source for the WebAssembly module
+├── demo/index.html             Browser demo entry page
+├── tests/                      Source layout and import-path checks
+├── tutorials/                  JSDoc tutorial sources
+├── dist/                       Generated browser distribution
+├── ../docs-site/js/api/        Generated API documentation (separate repository)
+├── jsdocs.json                 JSDoc configuration
+├── package.json                npm scripts and dependency declarations
+├── package-lock.json           Reproducible npm dependency lock
+└── README.md                   Module guide and JSDoc overview source
+</code></pre>
+</main>
+  <footer><p>Generated from the main repository README files. Edit the READMEs, then regenerate the documentation.</p></footer>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PQC File Sharing System</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+    body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid #aaa6; padding-bottom: 1rem; }
+    a { color: #2867b2; } table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #aaa6; padding: .55rem; text-align: left; }
+    pre { overflow-x: auto; padding: 1rem; background: #8882; border-radius: .4rem; }
+    code { overflow-wrap: anywhere; } img { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <nav aria-label="Documentation"><a href="index.html">Overview</a><a href="java/index.html">Java guide</a><a href="js/index.html">JavaScript guide</a></nav>
+  <main><h1 id="pqc-file-sharing-system">PQC File Sharing System</h1>
+<p>This repository contains the Java service and browser-side JavaScript library
+for a post-quantum file sharing system built around Merkle Tree Certificates
+(MTC), ML-KEM, and ML-DSA.</p>
+<p>The Java module issues user certificates, constructs signed MTC states, and
+generates membership proofs. The JavaScript module verifies the certificates
+and proofs in the browser and provides the client-side key encapsulation and
+encryption workflow.</p>
+<h2 id="modules">Modules</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Purpose</th>
+<th>README</th>
+<th>API documentation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Java</td>
+<td>Certificate issuance, MTC state construction, proof generation and validation, SQLite/MySQL persistence</td>
+<td><a href="java/index.html">Java README</a></td>
+<td><a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/java/apidocs/">Javadoc</a></td>
+</tr>
+<tr>
+<td>JavaScript</td>
+<td>Browser-side proof verification, ML-KEM key encapsulation, and encrypted file workflow</td>
+<td><a href="js/index.html">JavaScript README</a></td>
+<td><a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/js/api/">JSDoc</a></td>
+</tr>
+</tbody></table>
+<p>The module READMEs are the main guides and contain the complete prerequisites,
+build commands, examples, deployment notes, and documentation-generation
+instructions.</p>
+<h2 id="quick-start">Quick start</h2>
+<p>Run the self-contained Java SQLite example:</p>
+<pre><code class="language-bash">cd java/PQC-MTC
+mvn clean package
+java -cp target/pqc-mtc.jar com.smu.TestSQLite
+</code></pre>
+<p>Build the browser library:</p>
+<pre><code class="language-bash">cd js
+npm install
+npm run build
+</code></pre>
+<p>The JavaScript build produces <code>js/dist/pqc-lib.js</code> and <code>js/dist/pqc.wasm</code>.
+Serve the <code>js/</code> directory through a local HTTP server and open
+<code>demo/index.html</code> to run the browser demo; the WebAssembly asset cannot be
+loaded directly through a <code>file://</code> URL.</p>
+<h2 id="documentation">Documentation</h2>
+<p>Browse the <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/">documentation homepage</a>
+for the Java and JavaScript guides and API references. The published pages live
+in the <a href="https://github.com/yjm9110/smu.smc.pqc.mtc/blob/main/docs-site"><code>docs-site</code> submodule</a>, which is a separate repository.
+GitHub Pages must be enabled on that repository&#39;s <code>main</code> branch at its root.</p>
+<p>To regenerate every page from this repository&#39;s README files and source code,
+initialize the submodule and run:</p>
+<pre><code class="language-bash">git submodule update --init
+cd js &amp;&amp; npm ci &amp;&amp; cd ..
+./scripts/generate-docs.sh
+</code></pre>
+<p>Generate the Java API documentation from <code>java/PQC-MTC/</code>:</p>
+<pre><code class="language-bash">./maven_javadoc.sh
+</code></pre>
+<p>Generate the JavaScript API documentation from <code>js/</code>:</p>
+<pre><code class="language-bash">npm run docs
+</code></pre>
+<p>The individual commands also write into <code>docs-site/</code>. Commit and push changes
+in that submodule to publish them; the main repository&#39;s GitHub Actions workflow
+can perform regeneration and publication automatically after its documentation
+repository write token is configured.</p>
+<p>For module-specific details, continue with the <a href="java/index.html">Java guide</a>
+or the <a href="js/index.html">JavaScript guide</a>.</p>
+</main>
+  <footer><p>Generated from the main repository README files. Edit the READMEs, then regenerate the documentation.</p></footer>
+</body>
+</html>
