@@ -114,18 +114,20 @@ Import only the subset needed by an extension in production code.</p>
 │   └── pqc.wasm                Compiled ML-KEM and ML-DSA module
 ├── scripts/                    Executable development and build scripts
 │   ├── build-wasm.sh           Rebuilds src/pqc.wasm from Go source
-│   └── generate-docs.mjs       Generates and validates JSDoc
+│   ├── generate-docs.mjs       Generates and validates JSDoc
+│   └── generate-site-pages.mjs Generates README-based navigation pages
 ├── wasm/                       Go source for the WebAssembly module
 ├── demo/index.html             Browser demo entry page
 ├── tests/                      Source layout and import-path checks
 ├── tutorials/                  JSDoc tutorial sources
 ├── dist/                       Generated browser distribution
-├── ../docs-site/js/api/        Generated API documentation (separate repository)
 ├── jsdocs.json                 JSDoc configuration
 ├── package.json                npm scripts and dependency declarations
 ├── package-lock.json           Reproducible npm dependency lock
 └── README.md                   Module guide and JSDoc overview source
 </code></pre>
+<p>Generated API documentation is stored outside this module in the sibling
+<code>../docs-site/js/api/</code> submodule directory.</p>
 </main>
   <footer><p>Generated from the main repository README files. Edit the READMEs, then regenerate the documentation.</p></footer>
 </body>

@@ -83,13 +83,14 @@ integration guide, API reference, and baseline and append-only examples.</p>
 <h2 id="project-layout">Project layout</h2>
 <pre><code class="language-text">PQC-MTC/
 ├── conf/                 Local configuration template
-├── ../../docs-site/java/apidocs/  Generated Javadoc (separate repository)
 ├── src/main/java/        Service, persistence, runner, and examples
 ├── src/main/javadoc/     Javadoc overview source
 ├── maven_javadoc.sh      Documentation generator
 ├── maven_run.sh          Build and SQLite example helper
 └── pom.xml               Maven build configuration
 </code></pre>
+<p>Generated Javadoc is stored outside this module in the repository-level
+<code>docs-site/java/apidocs/</code> submodule directory.</p>
 <p>The browser-side verifier and encryption library are documented in the
 <a href="../js/index.html">JavaScript README</a>.</p>
 </main>
