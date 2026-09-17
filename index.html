@@ -82,10 +82,18 @@ cd js &amp;&amp; npm ci &amp;&amp; cd ..
 <p>Generate the JavaScript API documentation from <code>js/</code>:</p>
 <pre><code class="language-bash">npm run docs
 </code></pre>
-<p>The individual commands also write into <code>docs-site/</code>. Commit and push changes
-in that submodule to publish them; the main repository&#39;s GitHub Actions workflow
-can perform regeneration and publication automatically after its documentation
-repository write token is configured.</p>
+<p>The individual commands also write into <code>docs-site/</code>. Generation only changes
+local files; it does not commit or push either repository. To publish, review,
+commit, and push from the documentation submodule yourself:</p>
+<pre><code class="language-bash">git -C docs-site status
+git -C docs-site add -A
+git -C docs-site commit -m &quot;Update documentation&quot;
+git -C docs-site push origin main
+</code></pre>
+<p>The main repository records a submodule commit pointer, not the generated HTML.
+After publishing the documentation, you can commit the updated <code>docs-site</code>
+pointer in the main repository when you want a fresh checkout to reference that
+version. No <code>DOCS_PUSH_TOKEN</code> or GitHub Actions publishing workflow is needed.</p>
 <p>For module-specific details, continue with the <a href="java/index.html">Java guide</a>
 or the <a href="js/index.html">JavaScript guide</a>.</p>
 </main>
