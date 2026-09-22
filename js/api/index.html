@@ -62,8 +62,44 @@ npm run build
 ├── pqc-lib.js
 └── pqc.wasm
 </code></pre>
-<p>Keep these two files in the same directory. The JavaScript module loads the
-WebAssembly file relative to itself.</p>
+<p>Keep these two files in the same directory. In a plain browser ESM deployment,
+the library uses the adjacent <code>pqc.wasm</code> file by default. Applications bundled
+with Vue/Vite should explicitly provide the generated WASM asset URL as shown
+below.</p>
+<h2>Use in Vue and Vite</h2>
+<p>After running <code>npm run build</code>, copy both files from this project's <code>dist/</code> into
+the Vue project, for example:</p>
+<pre class="prettyprint source lang-text"><code>your-vue-app/
+└── src/
+    └── lib/
+        ├── pqc-lib.js
+        └── pqc.wasm
+</code></pre>
+<p>In application startup code such as <code>src/main.js</code>, import the WASM file as an
+explicit Vite asset URL and configure the library before calling any
+cryptographic function:</p>
+<pre class="prettyprint source lang-javascript"><code>import pqcWasmUrl from &quot;./lib/pqc.wasm?url&quot;;
+import {
+  setPqcWasmUrl,
+  kemKeyGen,
+  mlkem_enc_with_aesKey,
+  mlkem_dec_with_aesKey
+} from &quot;./lib/pqc-lib.js&quot;;
+
+setPqcWasmUrl(pqcWasmUrl);
+</code></pre>
+<p>Call <code>setPqcWasmUrl</code> only once during application startup. The explicit <code>?url</code>
+import lets Vite copy and hash the WASM asset correctly for both development
+and production builds. It must run before <code>kemKeyGen</code>, ML-KEM, or ML-DSA APIs
+trigger the first WASM load.</p>
+<p>As an alternative, copy <code>pqc.wasm</code> into Vue's <code>public/</code> directory and configure
+its URL using Vite's base path:</p>
+<pre class="prettyprint source lang-javascript"><code>setPqcWasmUrl(`${import.meta.env.BASE_URL}pqc.wasm`);
+</code></pre>
+<p>Using <code>import.meta.env.BASE_URL</code> instead of a hard-coded <code>/pqc.wasm</code> keeps the
+URL valid when the application is deployed below a subpath. If the configured
+URL is wrong, the first cryptographic call rejects with a WASM initialization
+error that includes the failed HTTP status.</p>
 <h2>Run tests</h2>
 <pre class="prettyprint source lang-bash"><code>npm test
 </code></pre>
@@ -141,6 +177,7 @@ Import only the subset needed by an extension in production code.</p>
 │   └── pqc.wasm                Compiled ML-KEM and ML-DSA module
 ├── scripts/                    Executable development and build scripts
 │   ├── build-wasm.sh           Rebuilds src/pqc.wasm from Go source
+│   ├── copy-wasm.mjs           Copies the WASM asset into dist during builds
 │   ├── generate-docs.mjs       Generates and validates JSDoc
 │   └── generate-site-pages.mjs Generates README-based navigation pages
 ├── wasm/                       Go source for the WebAssembly module
@@ -165,7 +202,7 @@ Import only the subset needed by an extension in production code.</p>
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
 </nav>
 
 <br class="clear">

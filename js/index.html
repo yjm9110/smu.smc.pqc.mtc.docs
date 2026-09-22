@@ -35,8 +35,44 @@ npm run build
 ├── pqc-lib.js
 └── pqc.wasm
 </code></pre>
-<p>Keep these two files in the same directory. The JavaScript module loads the
-WebAssembly file relative to itself.</p>
+<p>Keep these two files in the same directory. In a plain browser ESM deployment,
+the library uses the adjacent <code>pqc.wasm</code> file by default. Applications bundled
+with Vue/Vite should explicitly provide the generated WASM asset URL as shown
+below.</p>
+<h2 id="use-in-vue-and-vite">Use in Vue and Vite</h2>
+<p>After running <code>npm run build</code>, copy both files from this project&#39;s <code>dist/</code> into
+the Vue project, for example:</p>
+<pre><code class="language-text">your-vue-app/
+└── src/
+    └── lib/
+        ├── pqc-lib.js
+        └── pqc.wasm
+</code></pre>
+<p>In application startup code such as <code>src/main.js</code>, import the WASM file as an
+explicit Vite asset URL and configure the library before calling any
+cryptographic function:</p>
+<pre><code class="language-javascript">import pqcWasmUrl from &quot;./lib/pqc.wasm?url&quot;;
+import {
+  setPqcWasmUrl,
+  kemKeyGen,
+  mlkem_enc_with_aesKey,
+  mlkem_dec_with_aesKey
+} from &quot;./lib/pqc-lib.js&quot;;
+
+setPqcWasmUrl(pqcWasmUrl);
+</code></pre>
+<p>Call <code>setPqcWasmUrl</code> only once during application startup. The explicit <code>?url</code>
+import lets Vite copy and hash the WASM asset correctly for both development
+and production builds. It must run before <code>kemKeyGen</code>, ML-KEM, or ML-DSA APIs
+trigger the first WASM load.</p>
+<p>As an alternative, copy <code>pqc.wasm</code> into Vue&#39;s <code>public/</code> directory and configure
+its URL using Vite&#39;s base path:</p>
+<pre><code class="language-javascript">setPqcWasmUrl(`${import.meta.env.BASE_URL}pqc.wasm`);
+</code></pre>
+<p>Using <code>import.meta.env.BASE_URL</code> instead of a hard-coded <code>/pqc.wasm</code> keeps the
+URL valid when the application is deployed below a subpath. If the configured
+URL is wrong, the first cryptographic call rejects with a WASM initialization
+error that includes the failed HTTP status.</p>
 <h2 id="run-tests">Run tests</h2>
 <pre><code class="language-bash">npm test
 </code></pre>
@@ -114,6 +150,7 @@ Import only the subset needed by an extension in production code.</p>
 │   └── pqc.wasm                Compiled ML-KEM and ML-DSA module
 ├── scripts/                    Executable development and build scripts
 │   ├── build-wasm.sh           Rebuilds src/pqc.wasm from Go source
+│   ├── copy-wasm.mjs           Copies the WASM asset into dist during builds
 │   ├── generate-docs.mjs       Generates and validates JSDoc
 │   └── generate-site-pages.mjs Generates README-based navigation pages
 ├── wasm/                       Go source for the WebAssembly module
