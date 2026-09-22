@@ -260,7 +260,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line36">line 36</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line41">line 41</a>
     </li></ul></dd>
     
 
@@ -1480,6 +1480,407 @@
     
 
     
+    <h4 class="name" id="adminCertificateWorkflow"><span class="type-signature"></span>adminCertificateWorkflow<span class="signature">(options<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {Promise.&lt;{adminPublicKeyPem: string, adminPrivateKeyPem: string, userKemPublicKeyPem: string, userCertificatePem: string, certificate: Object, extractedUserKemPublicKey: Object, certificateValid: boolean}>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Runs the complete JavaScript administrator workflow: generate an ML-DSA key
+pair, export and re-import it, generate a user's ML-KEM key, issue and export
+the user certificate, then parse and verify that certificate.</p>
+<p>Configure the WASM URL with <code>setPqcWasmUrl</code> before calling this function in
+Vue/Vite applications.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>options</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    {}
+                
+                </td>
+            
+
+            <td class="description last"><p>Example options.</p>
+                <h6>Properties</h6>
+                
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>userId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    "UID-42"
+                
+                </td>
+            
+
+            <td class="description last"><p>User certificate common name.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>certInd</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    42
+                
+                </td>
+            
+
+            <td class="description last"><p>Certificate/Merkle leaf index.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>createTime</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+|
+
+<span class="param-type">Date</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    Date.now()
+                
+                </td>
+            
+
+            <td class="description last"><p>Validity start time.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>validTime</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    86400000
+                
+                </td>
+            
+
+            <td class="description last"><p>Validity duration in milliseconds.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+            </td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="examples.js.html">examples.js</a>, <a href="examples.js.html#line38">line 38</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Throws:</h5>
+
+        
+
+<dl>
+    <dt>
+        <div class="param-desc">
+        <p>If the newly issued certificate does not verify.</p>
+        </div>
+    </dt>
+    <dd></dd>
+    <dt>
+        <dl>
+            <dt>
+                Type
+            </dt>
+            <dd>
+                
+<span class="param-type">Error</span>
+
+
+            </dd>
+        </dl>
+    </dt>
+    <dd></dd>
+</dl>
+
+
+    
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Generated PEM values and verification result.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;{adminPublicKeyPem: string, adminPrivateKeyPem: string, userKemPublicKeyPem: string, userCertificatePem: string, certificate: Object, extractedUserKemPublicKey: Object, certificateValid: boolean}></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="aes_dec"><span class="type-signature"></span>aes_dec<span class="signature">(combinedData, key)</span><span class="type-signature"> &rarr; {Promise.&lt;Uint8Array>}</span></h4>
     
 
@@ -1604,7 +2005,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line474">line 474</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line698">line 698</a>
     </li></ul></dd>
     
 
@@ -1786,7 +2187,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line437">line 437</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line661">line 661</a>
     </li></ul></dd>
     
 
@@ -1896,7 +2297,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line425">line 425</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line649">line 649</a>
     </li></ul></dd>
     
 
@@ -2125,6 +2526,326 @@
     
 
     
+    <h4 class="name" id="createCertificateSerial"><span class="type-signature"></span>createCertificateSerial<span class="signature">(certInd)</span><span class="type-signature"> &rarr; {asn1js.Integer}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Generates the Java-compatible positive 128-bit certificate serial number.
+The low 32 bits contain the certificate index and the upper 96 bits are
+cryptographically random.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>certInd</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Non-negative signed Java integer certificate index.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line343">line 343</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>DER INTEGER serial number.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">asn1js.Integer</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="createDistinguishedName"><span class="type-signature"></span>createDistinguishedName<span class="signature">(attributes)</span><span class="type-signature"> &rarr; {pkijs.RelativeDistinguishedNames}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Creates an X.500 name while preserving one RDN set per supplied attribute.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>attributes</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array.&lt;{type: string, value: string}></span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Name attributes.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line323">line 323</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Encoded distinguished name.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">pkijs.RelativeDistinguishedNames</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="decodeCertFromPem"><span class="type-signature"></span>decodeCertFromPem<span class="signature">(pem)</span><span class="type-signature"> &rarr; {pkijs.Certificate}</span></h4>
     
 
@@ -2226,7 +2947,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line50">line 50</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line55">line 55</a>
     </li></ul></dd>
     
 
@@ -2267,6 +2988,116 @@
     <dd>
         
 <span class="param-type">pkijs.Certificate</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="dsaKeyGen"><span class="type-signature"></span>dsaKeyGen<span class="signature">()</span><span class="type-signature"> &rarr; {Promise.&lt;{publicKey: (CryptoKey|Object), privateKey: (CryptoKey|Object)}>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Generates a fresh ML-DSA-65 administrator signing key pair.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line313">line 313</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Generated public and private keys.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;{publicKey: (CryptoKey|Object), privateKey: (CryptoKey|Object)}></span>
 
 
     </dd>
@@ -2443,6 +3274,544 @@
     
 
     
+    <h4 class="name" id="exportCertToPem"><span class="type-signature"></span>exportCertToPem<span class="signature">(cert, label<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {string}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Exports a PKI.js certificate as a PEM block.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>cert</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">pkijs.Certificate</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Certificate to export.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>label</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    "USER CERTIFICATE"
+                
+                </td>
+            
+
+            <td class="description last"><p>PEM label.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line462">line 462</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>DER certificate wrapped as PEM.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="exportDsaPKToPem"><span class="type-signature"></span>exportDsaPKToPem<span class="signature">(dsaPK)</span><span class="type-signature"> &rarr; {Promise.&lt;string>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Exports an ML-DSA-65 public key as an SPKI PEM block.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>dsaPK</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>ML-DSA public key.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line291">line 291</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>PEM block labelled <code>ADMIN DSA PUBLIC KEY</code>.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;string></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="exportDsaSKToPem"><span class="type-signature"></span>exportDsaSKToPem<span class="signature">(dsaSK)</span><span class="type-signature"> &rarr; {Promise.&lt;string>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Exports an ML-DSA-65 private key as a PKCS#8 PEM block.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>dsaSK</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>ML-DSA private key.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line302">line 302</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>PEM block labelled <code>ADMIN DSA PRIVATE KEY</code>.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;string></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="exportKemPKToPem"><span class="type-signature"></span>exportKemPKToPem<span class="signature">(kemPK)</span><span class="type-signature"> &rarr; {Promise.&lt;string>}</span></h4>
     
 
@@ -2544,7 +3913,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line222">line 222</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line227">line 227</a>
     </li></ul></dd>
     
 
@@ -2703,7 +4072,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line234">line 234</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line239">line 239</a>
     </li></ul></dd>
     
 
@@ -3073,7 +4442,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line71">line 71</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line76">line 76</a>
     </li></ul></dd>
     
 
@@ -3232,7 +4601,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line89">line 89</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line94">line 94</a>
     </li></ul></dd>
     
 
@@ -3273,6 +4642,330 @@
     <dd>
         
 <span class="param-type">Promise.&lt;CryptoKey></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="importDsaPKFromPem"><span class="type-signature"></span>importDsaPKFromPem<span class="signature">(pemStr)</span><span class="type-signature"> &rarr; {CryptoKey|Object}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Imports an ML-DSA-65 public key from an SPKI PEM string.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>pemStr</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>PEM-encoded ML-DSA public key.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line263">line 263</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Imported public key used by the WASM ML-DSA provider.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="importDsaSKFromPem"><span class="type-signature"></span>importDsaSKFromPem<span class="signature">(pemStr)</span><span class="type-signature"> &rarr; {CryptoKey|Object}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Imports an ML-DSA-65 private key from a PKCS#8 PEM string.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>pemStr</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>PEM-encoded ML-DSA private key.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line277">line 277</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Imported private key used by the WASM ML-DSA provider.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
 
 
     </dd>
@@ -3391,7 +5084,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line154">line 154</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line159">line 159</a>
     </li></ul></dd>
     
 
@@ -3550,7 +5243,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line174">line 174</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line179">line 179</a>
     </li></ul></dd>
     
 
@@ -3844,7 +5537,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line273">line 273</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line490">line 490</a>
     </li></ul></dd>
     
 
@@ -4003,7 +5696,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line257">line 257</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line474">line 474</a>
     </li></ul></dd>
     
 
@@ -4044,6 +5737,381 @@
     <dd>
         
 <span class="param-type">boolean</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="issueUserCert"><span class="type-signature"></span>issueUserCert<span class="signature">(userId, certInd, userKemPK, adminDsaSK, createTime<span class="signature-attributes">opt</span>, validTime<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {Promise.&lt;pkijs.Certificate>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Issues an ML-DSA-65-signed X.509 user certificate containing an ML-KEM-768
+SubjectPublicKeyInfo, following the Java <code>issueCertForUser</code> layout.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>userId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>User identifier placed in the subject common name.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>certInd</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Certificate index stored in the serial number's low 32 bits.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>userKemPK</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
+|
+
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>ML-KEM public key object or SPKI PEM.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>adminDsaSK</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">CryptoKey</span>
+|
+
+<span class="param-type">Object</span>
+|
+
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Admin ML-DSA private key object or PKCS#8 PEM.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>createTime</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+|
+
+<span class="param-type">Date</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    Date.now()
+                
+                </td>
+            
+
+            <td class="description last"><p>Validity start time.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>validTime</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    86400000
+                
+                </td>
+            
+
+            <td class="description last"><p>Validity duration in milliseconds.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line372">line 372</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Signed certificate compatible with
+<a href="global.html#extractUserKemPK">extractUserKemPK</a>, <a href="global.html#verifyUserCert">verifyUserCert</a>, and <a href="global.html#exportCertToPem">exportCertToPem</a>.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;pkijs.Certificate></span>
 
 
     </dd>
@@ -4113,7 +6181,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line245">line 245</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line250">line 250</a>
     </li></ul></dd>
     
 
@@ -4295,7 +6363,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line206">line 206</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line211">line 211</a>
     </li></ul></dd>
     
 
@@ -4500,7 +6568,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line395">line 395</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line619">line 619</a>
     </li></ul></dd>
     
 
@@ -4659,7 +6727,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line193">line 193</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line198">line 198</a>
     </li></ul></dd>
     
 
@@ -4841,7 +6909,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line378">line 378</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line602">line 602</a>
     </li></ul></dd>
     
 
@@ -5069,7 +7137,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line413">line 413</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line637">line 637</a>
     </li></ul></dd>
     
 
@@ -5568,7 +7636,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line14">line 14</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line19">line 19</a>
     </li></ul></dd>
     
 
@@ -5867,7 +7935,7 @@ as a URL and call this function once, before invoking any cryptographic API.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="examples.js.html">examples.js</a>, <a href="examples.js.html#line19">line 19</a>
+        <a href="examples.js.html">examples.js</a>, <a href="examples.js.html#line96">line 96</a>
     </li></ul></dd>
     
 
@@ -6079,7 +8147,7 @@ proof nodes, previous state hash, timestamp, duration, and state signature.</p><
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line311">line 311</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line528">line 528</a>
     </li></ul></dd>
     
 
@@ -6290,7 +8358,7 @@ proof nodes, previous state hash, timestamp, duration, and state signature.</p><
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line112">line 112</a>
+        <a href="pqc_funcs.js.html">pqc_funcs.js</a>, <a href="pqc_funcs.js.html#line117">line 117</a>
     </li></ul></dd>
     
 
@@ -6705,7 +8773,7 @@ proof nodes, previous state hash, timestamp, duration, and state signature.</p><
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#adminCertificateWorkflow">adminCertificateWorkflow</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#createCertificateSerial">createCertificateSerial</a></li><li><a href="global.html#createDistinguishedName">createDistinguishedName</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#dsaKeyGen">dsaKeyGen</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportCertToPem">exportCertToPem</a></li><li><a href="global.html#exportDsaPKToPem">exportDsaPKToPem</a></li><li><a href="global.html#exportDsaSKToPem">exportDsaSKToPem</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importDsaPKFromPem">importDsaPKFromPem</a></li><li><a href="global.html#importDsaSKFromPem">importDsaSKFromPem</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#issueUserCert">issueUserCert</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
 </nav>
 
 <br class="clear">

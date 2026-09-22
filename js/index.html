@@ -73,6 +73,61 @@ its URL using Vite&#39;s base path:</p>
 URL valid when the application is deployed below a subpath. If the configured
 URL is wrong, the first cryptographic call rejects with a WASM initialization
 error that includes the failed HTTP status.</p>
+<h2 id="issue-user-certificates-in-javascript">Issue user certificates in JavaScript</h2>
+<p>An administrator can generate and persist an ML-DSA-65 key pair, restore it
+later, and issue an X.509 certificate containing a user&#39;s ML-KEM-768 public
+key. Configure the WASM URL before running this example in Vue/Vite. For a
+single runnable demonstration of the entire flow, import and call
+<code>adminCertificateWorkflow</code> from the generated library; its implementation is
+maintained in <code>src/examples.js</code>.</p>
+<pre><code class="language-javascript">import {
+  dsaKeyGen,
+  exportDsaPKToPem,
+  exportDsaSKToPem,
+  importDsaPKFromPem,
+  importDsaSKFromPem,
+  kemKeyGen,
+  exportKemPKToPem,
+  issueUserCert,
+  exportCertToPem,
+  decodeCertFromPem,
+  extractUserKemPK,
+  verifyUserCert
+} from &quot;./lib/pqc-lib.js&quot;;
+
+// Generate once and store these PEM strings securely.
+const { publicKey: adminPK, privateKey: adminSK } = await dsaKeyGen();
+const adminPKPem = await exportDsaPKToPem(adminPK);
+const adminSKPem = await exportDsaSKToPem(adminSK);
+
+// Restore the administrator keys in a later session.
+const restoredAdminPK = importDsaPKFromPem(adminPKPem);
+const restoredAdminSK = importDsaSKFromPem(adminSKPem);
+
+// The user normally generates this ML-KEM key pair client-side.
+const { publicKey: userKemPK } = await kemKeyGen();
+const userKemPKPem = await exportKemPKToPem(userKemPK);
+
+const certificate = await issueUserCert(
+  &quot;UID-42&quot;,                   // user ID
+  42,                         // certificate/Merkle leaf index
+  userKemPKPem,
+  restoredAdminSK,
+  Date.now(),
+  24 * 60 * 60 * 1000        // valid for one day
+);
+const certificatePem = exportCertToPem(certificate);
+
+// The exported certificate works with the existing consumer APIs.
+const decodedCertificate = decodeCertFromPem(certificatePem);
+const extractedKemPK = await extractUserKemPK(decodedCertificate);
+const valid = await verifyUserCert(decodedCertificate, restoredAdminPK);
+</code></pre>
+<p>The generated serial number follows the Java implementation: its upper 96
+bits are random and its lower 32 bits contain the certificate index. The
+issuer is <code>CN=Admin MLDSA CA, O=PQC File Sharing System</code>, and the signature
+algorithm is ML-DSA-65. Protect the exported administrator private key as a
+high-value signing credential.</p>
 <h2 id="run-tests">Run tests</h2>
 <pre><code class="language-bash">npm test
 </code></pre>

@@ -34,6 +34,11 @@ import * as pkijs from "pkijs";
 import * as asn1js from "asn1js";
 import { leafHASH, nodeHASH, stateHASH_raw } from "./hash_utils.js";
 
+const DSA_ALGORITHM = "ML-DSA-65";
+const KEM_ALGORITHM = "ML-KEM-768";
+const ML_DSA_65_OID = "2.16.840.1.101.3.4.3.18";
+const APP_NAME = "PQC File Sharing System";
+
 /**
  * Converts a PEM-formatted string (such as certificates or keys) into a binary ArrayBuffer.
  * @param {string} pem - The PEM-formatted string containing headers, footers, and base64 data.
@@ -272,9 +277,221 @@ export async function exportKemSKToPem(kemSK) {
  */
 export async function kemKeyGen() {
     // Call the provider's generateKey function with explicit algorithm settings and usages
-    const { publicKey, privateKey } = await mlkem.generateKey({ name: "ML-KEM-768" });
+    const { publicKey, privateKey } = await mlkem.generateKey({ name: KEM_ALGORITHM });
     // Return the generated public and private keys
     return { publicKey, privateKey };
+}
+
+/**
+ * Imports an ML-DSA-65 public key from an SPKI PEM string.
+ *
+ * @param {string} pemStr PEM-encoded ML-DSA public key.
+ * @returns {CryptoKey|Object} Imported public key used by the WASM ML-DSA provider.
+ */
+export function importDsaPKFromPem(pemStr) {
+    return mldsa.importPK(
+        "spki",
+        new Uint8Array(pemToBuffer(pemStr)),
+        { name: DSA_ALGORITHM }
+    );
+}
+
+/**
+ * Imports an ML-DSA-65 private key from a PKCS#8 PEM string.
+ *
+ * @param {string} pemStr PEM-encoded ML-DSA private key.
+ * @returns {CryptoKey|Object} Imported private key used by the WASM ML-DSA provider.
+ */
+export function importDsaSKFromPem(pemStr) {
+    return mldsa.importSK(
+        "pkcs8",
+        new Uint8Array(pemToBuffer(pemStr)),
+        { name: DSA_ALGORITHM }
+    );
+}
+
+/**
+ * Exports an ML-DSA-65 public key as an SPKI PEM block.
+ *
+ * @param {CryptoKey|Object} dsaPK ML-DSA public key.
+ * @returns {Promise&lt;string>} PEM block labelled `ADMIN DSA PUBLIC KEY`.
+ */
+export async function exportDsaPKToPem(dsaPK) {
+    const buffer = await mldsa.exportPK("spki", dsaPK);
+    return BufferToPem(buffer, "ADMIN DSA PUBLIC KEY");
+}
+
+/**
+ * Exports an ML-DSA-65 private key as a PKCS#8 PEM block.
+ *
+ * @param {CryptoKey|Object} dsaSK ML-DSA private key.
+ * @returns {Promise&lt;string>} PEM block labelled `ADMIN DSA PRIVATE KEY`.
+ */
+export async function exportDsaSKToPem(dsaSK) {
+    const buffer = await mldsa.exportSK("pkcs8", dsaSK);
+    return BufferToPem(buffer, "ADMIN DSA PRIVATE KEY");
+}
+
+/**
+ * Generates a fresh ML-DSA-65 administrator signing key pair.
+ *
+ * @returns {Promise&lt;{publicKey: CryptoKey|Object, privateKey: CryptoKey|Object}>}
+ * Generated public and private keys.
+ */
+export async function dsaKeyGen() {
+    return mldsa.generateKey({ name: DSA_ALGORITHM });
+}
+
+/**
+ * Creates an X.500 name while preserving one RDN set per supplied attribute.
+ *
+ * @param {Array&lt;{type: string, value: string}>} attributes Name attributes.
+ * @returns {pkijs.RelativeDistinguishedNames} Encoded distinguished name.
+ */
+function createDistinguishedName(attributes) {
+    const schema = new asn1js.Sequence({
+        value: attributes.map(({ type, value }) => new asn1js.Set({
+            value: [new pkijs.AttributeTypeAndValue({
+                type,
+                value: new asn1js.Utf8String({ value })
+            }).toSchema()]
+        }))
+    });
+    return new pkijs.RelativeDistinguishedNames({ schema });
+}
+
+/**
+ * Generates the Java-compatible positive 128-bit certificate serial number.
+ * The low 32 bits contain the certificate index and the upper 96 bits are
+ * cryptographically random.
+ *
+ * @param {number} certInd Non-negative signed Java integer certificate index.
+ * @returns {asn1js.Integer} DER INTEGER serial number.
+ */
+function createCertificateSerial(certInd) {
+    if (!Number.isInteger(certInd) || certInd &lt; 0 || certInd > 0x7fffffff) {
+        throw new RangeError("certInd must be a non-negative signed 32-bit integer");
+    }
+
+    const serial = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    new DataView(serial.buffer).setUint32(12, certInd, false);
+
+    // ASN.1 INTEGER is signed. Prefix a zero byte when the random high bit is
+    // set so the Java BigInteger serial remains positive.
+    const positiveSerial = (serial[0] &amp; 0x80) === 0
+        ? serial
+        : new Uint8Array([0, ...serial]);
+    return new asn1js.Integer({ valueHex: positiveSerial.buffer });
+}
+
+/**
+ * Issues an ML-DSA-65-signed X.509 user certificate containing an ML-KEM-768
+ * SubjectPublicKeyInfo, following the Java `issueCertForUser` layout.
+ *
+ * @param {string} userId User identifier placed in the subject common name.
+ * @param {number} certInd Certificate index stored in the serial number's low 32 bits.
+ * @param {CryptoKey|Object|string} userKemPK ML-KEM public key object or SPKI PEM.
+ * @param {CryptoKey|Object|string} adminDsaSK Admin ML-DSA private key object or PKCS#8 PEM.
+ * @param {number|Date} [createTime=Date.now()] Validity start time.
+ * @param {number} [validTime=86400000] Validity duration in milliseconds.
+ * @returns {Promise&lt;pkijs.Certificate>} Signed certificate compatible with
+ * {@link extractUserKemPK}, {@link verifyUserCert}, and {@link exportCertToPem}.
+ */
+export async function issueUserCert(
+    userId,
+    certInd,
+    userKemPK,
+    adminDsaSK,
+    createTime = Date.now(),
+    validTime = 24 * 60 * 60 * 1000
+) {
+    if (typeof userId !== "string" || userId.length === 0) {
+        throw new TypeError("userId must be a non-empty string");
+    }
+    if (!Number.isFinite(validTime) || validTime &lt;= 0) {
+        throw new RangeError("validTime must be a positive number of milliseconds");
+    }
+
+    const notBefore = createTime instanceof Date
+        ? new Date(createTime.getTime())
+        : new Date(createTime);
+    const notAfter = new Date(notBefore.getTime() + validTime);
+    if (Number.isNaN(notBefore.getTime()) || Number.isNaN(notAfter.getTime())) {
+        throw new RangeError("Certificate validity dates are invalid");
+    }
+
+    const kemPublicKey = typeof userKemPK === "string"
+        ? importKemPkFromPem(userKemPK)
+        : userKemPK;
+    const signingKey = typeof adminDsaSK === "string"
+        ? importDsaSKFromPem(adminDsaSK)
+        : adminDsaSK;
+    if (!kemPublicKey || kemPublicKey.type !== "public") {
+        throw new TypeError("userKemPK must be an ML-KEM public key or SPKI PEM");
+    }
+    if (kemPublicKey.algorithm?.name !== KEM_ALGORITHM) {
+        throw new TypeError(`userKemPK must use ${KEM_ALGORITHM}`);
+    }
+    if (!signingKey || signingKey.type !== "private") {
+        throw new TypeError("adminDsaSK must be an ML-DSA private key or PKCS#8 PEM");
+    }
+    if (signingKey.algorithm?.name !== DSA_ALGORITHM) {
+        throw new TypeError(`adminDsaSK must use ${DSA_ALGORITHM}`);
+    }
+
+    const spkiBuffer = await mlkem.exportPK("spki", kemPublicKey);
+    const spkiAsn1 = asn1js.fromBER(spkiBuffer);
+    if (spkiAsn1.offset === -1 || !spkiAsn1.result) {
+        throw new Error("Unable to encode the user's ML-KEM SubjectPublicKeyInfo");
+    }
+
+    const signatureAlgorithm = new pkijs.AlgorithmIdentifier({
+        algorithmId: ML_DSA_65_OID
+    });
+    const certificate = new pkijs.Certificate({
+        version: 2,
+        serialNumber: createCertificateSerial(certInd),
+        signature: signatureAlgorithm,
+        issuer: createDistinguishedName([
+            { type: "2.5.4.3", value: "Admin MLDSA CA" },
+            { type: "2.5.4.10", value: APP_NAME }
+        ]),
+        notBefore: new pkijs.Time({ value: notBefore }),
+        notAfter: new pkijs.Time({ value: notAfter }),
+        subject: createDistinguishedName([
+            { type: "2.5.4.3", value: userId }
+        ]),
+        subjectPublicKeyInfo: new pkijs.PublicKeyInfo({ schema: spkiAsn1.result }),
+        signatureAlgorithm
+    });
+
+    const tbs = certificate.encodeTBS().toBER(false);
+    const signature = await mldsa.sign(signingKey, tbs);
+    certificate.tbsView = new Uint8Array(tbs);
+    certificate.signatureValue = new asn1js.BitString({ valueHex: signature });
+
+    // Parse the completed DER again so `tbsView` is exactly the byte sequence
+    // consumed by verifyUserCert and Java X.509 implementations.
+    const certificateDer = certificate.toSchema(false).toBER(false);
+    const certificateAsn1 = asn1js.fromBER(certificateDer);
+    if (certificateAsn1.offset === -1 || !certificateAsn1.result) {
+        throw new Error("Unable to encode the issued user certificate");
+    }
+    return new pkijs.Certificate({ schema: certificateAsn1.result });
+}
+
+/**
+ * Exports a PKI.js certificate as a PEM block.
+ *
+ * @param {pkijs.Certificate} cert Certificate to export.
+ * @param {string} [label="USER CERTIFICATE"] PEM label.
+ * @returns {string} DER certificate wrapped as PEM.
+ */
+export function exportCertToPem(cert, label = "USER CERTIFICATE") {
+    if (!(cert instanceof pkijs.Certificate)) {
+        throw new TypeError("cert must be a PKI.js Certificate");
+    }
+    return BufferToPem(cert.toSchema(false).toBER(false), label);
 }
 
 /**
@@ -372,6 +589,13 @@ export async function verifyMemberProof(proofJsonStr, adminDsaPK, time){
 var pqc_funcs = {
     kemKeyGen,
     exportKemPKToPem,
+    dsaKeyGen,
+    importDsaPKFromPem,
+    importDsaSKFromPem,
+    exportDsaPKToPem,
+    exportDsaSKToPem,
+    issueUserCert,
+    exportCertToPem,
     decodeCertFromPem,
     isCertExpired,
     isCACert,
@@ -535,7 +759,7 @@ export async function aes_dec(combinedData, key) {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#adminCertificateWorkflow">adminCertificateWorkflow</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#createCertificateSerial">createCertificateSerial</a></li><li><a href="global.html#createDistinguishedName">createDistinguishedName</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#dsaKeyGen">dsaKeyGen</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportCertToPem">exportCertToPem</a></li><li><a href="global.html#exportDsaPKToPem">exportDsaPKToPem</a></li><li><a href="global.html#exportDsaSKToPem">exportDsaSKToPem</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importDsaPKFromPem">importDsaPKFromPem</a></li><li><a href="global.html#importDsaSKFromPem">importDsaSKFromPem</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#issueUserCert">issueUserCert</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
 </nav>
 
 <br class="clear">

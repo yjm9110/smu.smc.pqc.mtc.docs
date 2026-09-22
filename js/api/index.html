@@ -100,6 +100,61 @@ its URL using Vite's base path:</p>
 URL valid when the application is deployed below a subpath. If the configured
 URL is wrong, the first cryptographic call rejects with a WASM initialization
 error that includes the failed HTTP status.</p>
+<h2>Issue user certificates in JavaScript</h2>
+<p>An administrator can generate and persist an ML-DSA-65 key pair, restore it
+later, and issue an X.509 certificate containing a user's ML-KEM-768 public
+key. Configure the WASM URL before running this example in Vue/Vite. For a
+single runnable demonstration of the entire flow, import and call
+<code>adminCertificateWorkflow</code> from the generated library; its implementation is
+maintained in <code>src/examples.js</code>.</p>
+<pre class="prettyprint source lang-javascript"><code>import {
+  dsaKeyGen,
+  exportDsaPKToPem,
+  exportDsaSKToPem,
+  importDsaPKFromPem,
+  importDsaSKFromPem,
+  kemKeyGen,
+  exportKemPKToPem,
+  issueUserCert,
+  exportCertToPem,
+  decodeCertFromPem,
+  extractUserKemPK,
+  verifyUserCert
+} from &quot;./lib/pqc-lib.js&quot;;
+
+// Generate once and store these PEM strings securely.
+const { publicKey: adminPK, privateKey: adminSK } = await dsaKeyGen();
+const adminPKPem = await exportDsaPKToPem(adminPK);
+const adminSKPem = await exportDsaSKToPem(adminSK);
+
+// Restore the administrator keys in a later session.
+const restoredAdminPK = importDsaPKFromPem(adminPKPem);
+const restoredAdminSK = importDsaSKFromPem(adminSKPem);
+
+// The user normally generates this ML-KEM key pair client-side.
+const { publicKey: userKemPK } = await kemKeyGen();
+const userKemPKPem = await exportKemPKToPem(userKemPK);
+
+const certificate = await issueUserCert(
+  &quot;UID-42&quot;,                   // user ID
+  42,                         // certificate/Merkle leaf index
+  userKemPKPem,
+  restoredAdminSK,
+  Date.now(),
+  24 * 60 * 60 * 1000        // valid for one day
+);
+const certificatePem = exportCertToPem(certificate);
+
+// The exported certificate works with the existing consumer APIs.
+const decodedCertificate = decodeCertFromPem(certificatePem);
+const extractedKemPK = await extractUserKemPK(decodedCertificate);
+const valid = await verifyUserCert(decodedCertificate, restoredAdminPK);
+</code></pre>
+<p>The generated serial number follows the Java implementation: its upper 96
+bits are random and its lower 32 bits contain the certificate index. The
+issuer is <code>CN=Admin MLDSA CA, O=PQC File Sharing System</code>, and the signature
+algorithm is ML-DSA-65. Protect the exported administrator private key as a
+high-value signing credential.</p>
 <h2>Run tests</h2>
 <pre class="prettyprint source lang-bash"><code>npm test
 </code></pre>
@@ -202,7 +257,7 @@ Import only the subset needed by an extension in production code.</p>
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-hash_utils.html">hash_utils</a></li></ul><h3>Namespaces</h3><ul><li><a href="mldsa.html">mldsa</a></li><li><a href="mlkem.html">mlkem</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-quick-start.html">quick-start</a></li></ul><h3>Global</h3><ul><li><a href="global.html#BufferToPem">BufferToPem</a></li><li><a href="global.html#_extractRawPrivKey">_extractRawPrivKey</a></li><li><a href="global.html#_extractRawPubKey">_extractRawPubKey</a></li><li><a href="global.html#_importPK">_importPK</a></li><li><a href="global.html#_importSK">_importSK</a></li><li><a href="global.html#_wrapPkcs8">_wrapPkcs8</a></li><li><a href="global.html#_wrapSpki">_wrapSpki</a></li><li><a href="global.html#adminCertificateWorkflow">adminCertificateWorkflow</a></li><li><a href="global.html#aes_dec">aes_dec</a></li><li><a href="global.html#aes_enc">aes_enc</a></li><li><a href="global.html#aes_random_key_gen">aes_random_key_gen</a></li><li><a href="global.html#concatBytes">concatBytes</a></li><li><a href="global.html#createCertificateSerial">createCertificateSerial</a></li><li><a href="global.html#createDistinguishedName">createDistinguishedName</a></li><li><a href="global.html#decodeCertFromPem">decodeCertFromPem</a></li><li><a href="global.html#dsaKeyGen">dsaKeyGen</a></li><li><a href="global.html#encodeLength">encodeLength</a></li><li><a href="global.html#exportCertToPem">exportCertToPem</a></li><li><a href="global.html#exportDsaPKToPem">exportDsaPKToPem</a></li><li><a href="global.html#exportDsaSKToPem">exportDsaSKToPem</a></li><li><a href="global.html#exportKemPKToPem">exportKemPKToPem</a></li><li><a href="global.html#exportKemSKToPem">exportKemSKToPem</a></li><li><a href="global.html#exportKey">exportKey</a></li><li><a href="global.html#extractAdminDsaPK">extractAdminDsaPK</a></li><li><a href="global.html#extractUserKemPK">extractUserKemPK</a></li><li><a href="global.html#importDsaPKFromPem">importDsaPKFromPem</a></li><li><a href="global.html#importDsaSKFromPem">importDsaSKFromPem</a></li><li><a href="global.html#importKemPkFromPem">importKemPkFromPem</a></li><li><a href="global.html#importKemSkFromPem">importKemSkFromPem</a></li><li><a href="global.html#initWasm">initWasm</a></li><li><a href="global.html#isCACert">isCACert</a></li><li><a href="global.html#isCertExpired">isCertExpired</a></li><li><a href="global.html#issueUserCert">issueUserCert</a></li><li><a href="global.html#kemKeyGen">kemKeyGen</a></li><li><a href="global.html#mlkem_dec">mlkem_dec</a></li><li><a href="global.html#mlkem_dec_with_aesKey">mlkem_dec_with_aesKey</a></li><li><a href="global.html#mlkem_enc">mlkem_enc</a></li><li><a href="global.html#mlkem_enc_with_aesKey">mlkem_enc_with_aesKey</a></li><li><a href="global.html#mlkem_re_enc_with_aesKey">mlkem_re_enc_with_aesKey</a></li><li><a href="global.html#parseAlgName">parseAlgName</a></li><li><a href="global.html#parseAsn1Length">parseAsn1Length</a></li><li><a href="global.html#pemToBuffer">pemToBuffer</a></li><li><a href="global.html#setPqcWasmUrl">setPqcWasmUrl</a></li><li><a href="global.html#test_work_flow">test_work_flow</a></li><li><a href="global.html#verifyMemberProof">verifyMemberProof</a></li><li><a href="global.html#verifyUserCert">verifyUserCert</a></li></ul>
 </nav>
 
 <br class="clear">
