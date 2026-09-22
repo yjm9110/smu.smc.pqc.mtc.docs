@@ -68,14 +68,21 @@ loaded directly through a <code>file://</code> URL.</p>
 <h2 id="documentation">Documentation</h2>
 <p>Browse the <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/">documentation homepage</a>
 for the Java and JavaScript guides and API references. The published pages live
-in the <a href="https://github.com/yjm9110/smu.smc.pqc.mtc/blob/main/docs-site"><code>docs-site</code> submodule</a>, which is a separate repository.
-GitHub Pages must be enabled on that repository&#39;s <code>main</code> branch at its root.</p>
+in the independent
+<a href="https://github.com/yjm9110/smu.smc.pqc.mtc.docs"><code>yjm9110/smu.smc.pqc.mtc.docs</code></a>
+repository. GitHub Pages must be enabled on that repository&#39;s <code>main</code> branch at
+its root. The stable links above always serve the latest published <code>main</code> and
+do not depend on a documentation commit recorded by this repository.</p>
 <p>To regenerate every page from this repository&#39;s README files and source code,
-initialize the submodule and run:</p>
-<pre><code class="language-bash">git submodule update --init
+clone the documentation repository once, update its local <code>main</code>, and run:</p>
+<pre><code class="language-bash">git clone https://github.com/yjm9110/smu.smc.pqc.mtc.docs.git docs-site
+git -C docs-site switch main
+git -C docs-site pull --ff-only origin main
 cd js &amp;&amp; npm ci &amp;&amp; cd ..
 ./scripts/generate-docs.sh
 </code></pre>
+<p>The main repository ignores <code>docs-site/</code>, so commits made there never change
+the main repository&#39;s status or require an updated repository reference.</p>
 <p>Generate the Java API documentation from <code>java/PQC-MTC/</code>:</p>
 <pre><code class="language-bash">./maven_javadoc.sh
 </code></pre>
@@ -84,16 +91,14 @@ cd js &amp;&amp; npm ci &amp;&amp; cd ..
 </code></pre>
 <p>The individual commands also write into <code>docs-site/</code>. Generation only changes
 local files; it does not commit or push either repository. To publish, review,
-commit, and push from the documentation submodule yourself:</p>
+commit, and push from the independent documentation repository yourself:</p>
 <pre><code class="language-bash">git -C docs-site status
 git -C docs-site add -A
 git -C docs-site commit -m &quot;Update documentation&quot;
 git -C docs-site push origin main
 </code></pre>
-<p>The main repository records a submodule commit pointer, not the generated HTML.
-After publishing the documentation, you can commit the updated <code>docs-site</code>
-pointer in the main repository when you want a fresh checkout to reference that
-version. No <code>DOCS_PUSH_TOKEN</code> or GitHub Actions publishing workflow is needed.</p>
+<p>No documentation files or commit pointers are recorded in the main repository.
+No <code>DOCS_PUSH_TOKEN</code> or GitHub Actions publishing workflow is needed.</p>
 <p>For module-specific details, continue with the <a href="java/index.html">Java guide</a>
 or the <a href="js/index.html">JavaScript guide</a>.</p>
 </main>
