@@ -53,6 +53,64 @@ PKI.js, ASN.1.js, and js-sha3.</p>
 <li>npm, included with the official Node.js distribution</li>
 <li>Go only when rebuilding <code>src/pqc.wasm</code> from <code>wasm/</code></li>
 </ul>
+<h2>Supported development environments</h2>
+<p>The distributed library is an ES module targeting ES2019 and uses WebAssembly,
+<code>fetch</code>, typed arrays, and browser cryptographic APIs. The following environments
+are supported for development or application integration:</p>
+<table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Support</th>
+<th>Integration requirements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Modern browsers with native ES modules</td>
+<td>Supported</td>
+<td>Serve the JS and WASM files over HTTP(S); configure the WASM URL when it is not relative to the page.</td>
+</tr>
+<tr>
+<td>Vue 3 with Vite</td>
+<td>Supported and documented</td>
+<td>Import <code>pqc.wasm?url</code> or place it in <code>public/</code>, then call <code>setPqcWasmUrl</code> during application startup.</td>
+</tr>
+<tr>
+<td>Other Vite applications, including React, Svelte, and vanilla JS</td>
+<td>Supported</td>
+<td>Use the same <code>?url</code> asset import and initialization shown for Vue.</td>
+</tr>
+<tr>
+<td>Webpack 4</td>
+<td>Supported</td>
+<td>The bundle is validated with Acorn 6 as an ES2019 module; copy or emit <code>pqc.wasm</code> and pass its public URL to <code>setPqcWasmUrl</code>.</td>
+</tr>
+<tr>
+<td>Webpack 5</td>
+<td>Supported</td>
+<td>Emit the WASM file as an asset/resource and pass the emitted URL to <code>setPqcWasmUrl</code>.</td>
+</tr>
+<tr>
+<td>Chrome Extension Manifest V3</td>
+<td>Supported</td>
+<td>Use a module service worker, allow local WebAssembly in the extension CSP, package both files locally, and configure the WASM URL with <code>chrome.runtime.getURL</code>.</td>
+</tr>
+<tr>
+<td>VS Code Dev Containers</td>
+<td>Supported for build, test, and documentation work</td>
+<td>Use the repository container with Node.js/npm; Go is needed only for rebuilding the WASM binary.</td>
+</tr>
+<tr>
+<td>Node.js command-line tests</td>
+<td>Supported for project verification</td>
+<td>Used by <code>npm test</code>; the published library remains browser-oriented rather than a Node.js server API.</td>
+</tr>
+</tbody>
+</table>
+<p>Other browser frameworks can use the library when their build pipeline accepts
+ES2019 modules, preserves the WebAssembly asset, and provides its final URL via
+<code>setPqcWasmUrl</code> before the first cryptographic operation.</p>
 <h2>Install dependencies and build</h2>
 <pre class="prettyprint source lang-bash"><code>npm install
 npm run build
@@ -62,10 +120,10 @@ npm run build
 ├── pqc-lib.js
 └── pqc.wasm
 </code></pre>
-<p>Keep these two files in the same directory. In a plain browser ESM deployment,
-the library uses the adjacent <code>pqc.wasm</code> file by default. Applications bundled
-with Vue/Vite should explicitly provide the generated WASM asset URL as shown
-below.</p>
+<p>Keep these two files together when deploying them. The default <code>./pqc.wasm</code>
+URL is resolved relative to the hosting page. Applications that place the WASM
+file elsewhere, including applications bundled with Vue, Vite, or Webpack,
+must explicitly provide its deployed URL as shown below.</p>
 <h2>Use in Vue and Vite</h2>
 <p>After running <code>npm run build</code>, copy both files from this project's <code>dist/</code> into
 the Vue project, for example:</p>
@@ -192,11 +250,15 @@ Browse the published <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/js/
   &quot;background&quot;: {
     &quot;service_worker&quot;: &quot;background.js&quot;,
     &quot;type&quot;: &quot;module&quot;
+  },
+  &quot;content_security_policy&quot;: {
+    &quot;extension_pages&quot;: &quot;script-src 'self' 'wasm-unsafe-eval'; object-src 'self'&quot;
   }
 }
 </code></pre>
 <p>Then import the required API without modifying this library's source:</p>
 <pre class="prettyprint source lang-javascript"><code>import {
+  setPqcWasmUrl,
   kemKeyGen,
   exportKemPKToPem,
   decodeCertFromPem,
@@ -214,6 +276,8 @@ Browse the published <a href="https://yjm9110.github.io/smu.smc.pqc.mtc.docs/js/
   aes_enc,
   aes_dec
 } from &quot;./lib/pqc-lib.js&quot;;
+
+setPqcWasmUrl(chrome.runtime.getURL(&quot;lib/pqc.wasm&quot;));
 </code></pre>
 <p>This is the complete set of public APIs called directly by <code>test_work_flow</code>.
 Import only the subset needed by an extension in production code.</p>

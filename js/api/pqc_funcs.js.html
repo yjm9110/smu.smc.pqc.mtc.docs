@@ -429,13 +429,13 @@ export async function issueUserCert(
     if (!kemPublicKey || kemPublicKey.type !== "public") {
         throw new TypeError("userKemPK must be an ML-KEM public key or SPKI PEM");
     }
-    if (kemPublicKey.algorithm?.name !== KEM_ALGORITHM) {
+    if (!kemPublicKey.algorithm || kemPublicKey.algorithm.name !== KEM_ALGORITHM) {
         throw new TypeError(`userKemPK must use ${KEM_ALGORITHM}`);
     }
     if (!signingKey || signingKey.type !== "private") {
         throw new TypeError("adminDsaSK must be an ML-DSA private key or PKCS#8 PEM");
     }
-    if (signingKey.algorithm?.name !== DSA_ALGORITHM) {
+    if (!signingKey.algorithm || signingKey.algorithm.name !== DSA_ALGORITHM) {
         throw new TypeError(`adminDsaSK must use ${DSA_ALGORITHM}`);
     }
 

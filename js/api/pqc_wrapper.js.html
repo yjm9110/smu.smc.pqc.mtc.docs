@@ -35,7 +35,10 @@ import "./wasm_exec.js";
 
 let wasmLoaded = false;
 let wasmLoadPromise = null;
-let pqcWasmUrl = new URL("./pqc.wasm", import.meta.url);
+// Keep the default URL parseable by legacy bundlers such as Webpack 4.
+// fetch() resolves this path against the hosting page; bundled applications
+// should call setPqcWasmUrl() with the URL emitted for their WASM asset.
+let pqcWasmUrl = "./pqc.wasm";
 
 /**
  * Override the URL used to load the PQC WebAssembly module.
@@ -93,7 +96,8 @@ async function initWasm() {
                 throw new Error(`Unable to fetch ${response.url || pqcWasmUrl}: HTTP ${response.status}`);
             }
 
-            const contentType = response.headers.get("content-type") ?? "";
+            const responseContentType = response.headers.get("content-type");
+            const contentType = responseContentType === null ? "" : responseContentType;
             const pqcRes = contentType.includes("application/wasm")
                 ? await WebAssembly.instantiateStreaming(response, go.importObject)
                 : await WebAssembly.instantiate(await response.arrayBuffer(), go.importObject);
